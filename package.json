@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "phaser": "^3.88.2",
-    "phaser3-rex-plugins": "^1.80.15"
+    "phaser3-rex-plugins": "^1.80.15",
+    "vite-plugin-static-copy": "^2.3.0"
   },
   "devDependencies": {
     "vite": "^6.2.5"

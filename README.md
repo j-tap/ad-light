@@ -1,9 +1,7 @@
-# PhaserJS Starter Template
+# AD Light - PhaserJS Game
 
 ## Description
-This is a simple [PhaserJS](https://phaser.io/) starter template for creating 2D games.
-It includes a basic game setup with a preloader, main menu, and game scenes.
-The template is designed to be easily customizable and extendable for your own projects.
+Game for [Ludum Dare 57](https://ldjam.com/events/ludum-dare/57)
 
 ## Running the Project
 ```

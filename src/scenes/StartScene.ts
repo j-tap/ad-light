@@ -31,16 +31,39 @@ export default class StartScene extends BaseScene {
       .setOrigin(0.5)
       .setScale(0.5);
 
+    const buttonBg = this.add.graphics()
+      .fillStyle(0x3498db, 1)
+      .fillRoundedRect(-75, -25, 150, 50, 12) // (x, y, width, height, радиус углов)
+      .lineStyle(2, 0xffffff)
+      .strokeRoundedRect(-75, -25, 150, 50, 12)
+      .setInteractive(new Phaser.Geom.Rectangle(-75, -25, 150, 50), Phaser.Geom.Rectangle.Contains);
+
     this.startButton = this.rexUI.add.label({
       x: this.centerX,
       y: this.centerY,
-      align: 'center',
       width: 150,
       height: 50,
-      background: this.add.rectangle(0, 0, 150, 50, 0x3498db).setInteractive(),
-      text: this.add.text(0, 0, 'Start', { fontSize: '24px', color: '#ffffff' }),
+      align: 'center',
+      background: buttonBg,
+      text: this.add.text(0, 0, 'Start', { fontSize: '24px', color: '#ffffff', fontFamily: 'Arial' }),
       space: { left: 10, right: 10, top: 10, bottom: 10 }
-    }).layout().setInteractive()
+    })
+      .layout()
+      .setInteractive()
+      .on('pointerover', () => {
+        buttonBg.clear();
+        buttonBg.fillStyle(0x5dade2, 1);
+        buttonBg.fillRoundedRect(-75, -25, 150, 50, 12);
+        buttonBg.lineStyle(2, 0xffffff);
+        buttonBg.strokeRoundedRect(-75, -25, 150, 50, 12);
+      })
+      .on('pointerout', () => {
+        buttonBg.clear();
+        buttonBg.fillStyle(0x3498db, 1);
+        buttonBg.fillRoundedRect(-75, -25, 150, 50, 12);
+        buttonBg.lineStyle(2, 0xffffff);
+        buttonBg.strokeRoundedRect(-75, -25, 150, 50, 12);
+      })
       .on('pointerdown', () => {
         this.startGame();
       });
