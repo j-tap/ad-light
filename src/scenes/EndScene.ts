@@ -11,7 +11,7 @@ export default class EndScene extends BaseScene {
   }
 
   create() {
-    this.endMusic = this.sound.add('menuMusic', { loop: true, volume: 0.5 });
+    this.endMusic = this.sound.add('menuMusic', { loop: true, volume: 0.3 });
     this.endMusic.play();
 
     this.createUI()

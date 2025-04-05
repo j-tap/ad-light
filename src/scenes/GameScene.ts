@@ -10,22 +10,116 @@ export default class GameScene extends BaseScene {
   private musicKeys = ['gameMusic1', 'gameMusic2'];
   private currentTrackIndex = 0;
   private currentMusic!: Phaser.Sound.BaseSound;
+  private scoreText!: Phaser.GameObjects.Text;
+  private levelWidth = 10000;
+  private hearts: string[] = [];
 
   constructor() {
     super('GameScene');
   }
 
   create() {
-    this.levelManager = new LevelManager(this);
-    this.player = new Player(this);
     this.gameManager = new GameManager(this);
 
+    this.levelManager = new LevelManager(this);
+    this.levelManager.createLevel();
+
+    this.createAnimations();
+    this.createPlayer(); // сначала игрок
+    this.createCamera();
+
+    this.gameManager.setPlayer(this.player);
+
+    this.setupMusic();
+    this.createUI();
+    this.setupEvents();
+
+    this.gameManager.startGame();
+    this.gameManager.setupCollisions(this.player);
+
+    this.cameras.main.postFX.addVignette(.5, .5, .8, 0)
+
+    this.scoreText = this.add.text(20, 20, 'Score: 0', {
+      fontSize: '32px',
+      color: '#ffffff',
+      fontFamily: 'Arial'
+    }).setScrollFactor(0);
+
+    this.createHearts();
+  }
+
+  update(time: number, delta: number) {
+    this.gameManager.update(time, delta);
+
+    if (!this.gameManager.isPlaying()) return;
+
+    this.player.update(time, delta);
+    this.levelManager.update(time, delta);
+
+    this.scoreText.setText('Score: ' + this.gameManager.getScore());
+
+    this.updateHearts();
+  }
+
+  createAnimations() {
+    const animations = [
+      { key: 'swim', texture: 'player', frameRate: 8 },
+      { key: 'enemy-swim', texture: 'enemy1', frameRate: 6 },
+    ];
+
+    animations.forEach(({ key, texture, frameRate }) => {
+      this.anims.create({
+        key,
+        frames: this.anims.generateFrameNumbers(texture, { start: 0, end: 3 }),
+        frameRate,
+        repeat: -1
+      });
+    });
+  }
+
+  createPlayer() {
+    this.player = new Player(this);
+    this.physics.world.gravity.y = 50;
+    this.physics.world.setBounds(0, 0, this.levelWidth, this.scale.height);
+  }
+
+  createCamera() {
+    this.cameras.main.setBounds(0, 0, this.levelWidth, this.scale.height);
+    this.cameras.main.startFollow(this.player.getSprite(), true, 0.08, 0.08);
+    this.cameras.main.setDeadzone(0, 100);
+    this.cameras.main.setBackgroundColor('#000000');
+  }
+
+  setupMusic() {
     this.currentTrackIndex = Phaser.Math.Between(0, this.musicKeys.length - 1);
     this.playNextTrack();
+  }
 
-    this.scale.on('resize', this.resize, this);
-    this.createUI();
-    this.gameManager.startGame();
+  playNextTrack() {
+    if (this.currentMusic) {
+      this.currentMusic.destroy();
+    }
+
+    const musicKey = this.musicKeys[this.currentTrackIndex];
+    this.currentMusic = this.sound.add(musicKey, { volume: 0.3 });
+    this.currentMusic.play();
+
+    this.currentMusic.once('complete', () => {
+      this.currentTrackIndex = this.getRandomTrackIndex(this.currentTrackIndex);
+      this.playNextTrack();
+    });
+  }
+
+  getRandomTrackIndex(exclude: number): number {
+    let index;
+    do {
+      index = Phaser.Math.Between(0, this.musicKeys.length - 1);
+    } while (index === exclude);
+    return index;
+  }
+
+  setupEvents() {
+    this.scale.on('resize', () => {});
 
     this.input.keyboard.on('keydown-ESC', () => {
       if (this.gameManager.isPlaying()) {
@@ -37,38 +131,22 @@ export default class GameScene extends BaseScene {
 
     this.events.on('resume-game', () => {
       this.gameManager.startGame();
-      this.currentMusic.play()
+      this.currentMusic?.resume();
     });
 
     this.events.on('pause', () => {
-      if (this.currentMusic && this.currentMusic.isPlaying) {
-        this.currentMusic.pause();
-      }
-    })
+      this.currentMusic?.pause();
+    });
+
     this.events.on('shutdown', () => {
-      if (this.currentMusic && this.currentMusic.isPlaying) {
-        this.currentMusic.stop();
-      }
+      this.currentMusic?.stop();
     });
   }
 
-  update(time: number, delta: number) {
-    if (this.gameManager.isPlaying()) {
-      this.player.update(time, delta);
-      this.levelManager.update(time, delta);
-    }
-    this.gameManager.update(time, delta);
-  }
-
   createUI() {
-    this.add.text(this.centerX, this.centerY - 80, 'Game Started!', {
-      fontSize: '32px',
-      color: '#ffffff'
-    }).setOrigin(0.5);
-
     this.rexUI.add.label({
       x: this.centerX,
-      y: this.centerY,
+      y: 30,
       width: 150,
       height: 50,
       background: this.add.rectangle(0, 0, 150, 50, 0x3498db).setInteractive(),
@@ -78,32 +156,34 @@ export default class GameScene extends BaseScene {
     })
       .layout()
       .setInteractive()
+      .setScrollFactor(0)
       .on('pointerdown', () => {
         this.scene.start('EndScene');
       });
   }
 
-  playNextTrack() {
-    if (this.currentMusic) {
-      this.currentMusic.destroy();
+  createHearts() {
+    this.hearts.forEach(heart => heart.destroy());
+    this.hearts = [];
+
+    const heartSpacing = 40;
+    const startX = 20;
+    const startY = 70;
+
+    for (let i = 0; i < this.player.getHealth(); i++) {
+      const heart = this.add.text(startX + i * heartSpacing, startY, '❤️', {
+        fontSize: '32px'
+      })
+        .setScrollFactor(0);
+      this.hearts.push(heart);
     }
-
-    const musicKey = this.musicKeys[this.currentTrackIndex];
-    this.currentMusic = this.sound.add(musicKey, { volume: 0.5 });
-    this.currentMusic.play();
-
-    this.currentMusic.once('complete', () => {
-      let nextIndex;
-      do {
-        nextIndex = Phaser.Math.Between(0, this.musicKeys.length - 1);
-      } while (nextIndex === this.currentTrackIndex);
-
-      this.currentTrackIndex = nextIndex;
-      this.playNextTrack();
-    });
   }
 
-  resize() {
-    //
+  updateHearts() {
+    if (!this.player) return;
+    const health = this.player.getHealth();
+    this.hearts.forEach((heart, index) => {
+      heart.setVisible(index < health);
+    });
   }
 }

@@ -29,11 +29,30 @@ export default class PreloadScene extends Phaser.Scene {
   }
 
   loadAssets() {
-    this.load.image('logo', 'assets/images/logo.png');
-    this.load.audio('menuMusic', 'assets/audio/menu.mp3');
+    this.load.spritesheet('player', 'assets/images/player-sprite.png', {
+      frameWidth: 128,
+      frameHeight: 128,
+    });
 
+    this.load.spritesheet('enemy1', 'assets/images/enemy-1-sprite.png', {
+      frameWidth: 128,
+      frameHeight: 128,
+    });
+
+    this.load.image('logo', 'assets/images/logo.png');
+    this.load.image('backgroundFar', 'assets/images/bg/backgroundFar.png');
+    this.load.image('backgroundNear', 'assets/images/bg/backgroundNear.png');
+    this.load.image('mollusk', 'assets/images/mollusk.png');
+    this.load.image('fishBone', 'assets/images/fish-bone.png');
+    this.load.image('bubbleParticle', 'assets/images/bubble-particle.png');
+    this.load.image('planktonParticle', 'assets/images/plankton-particle.png');
+
+    this.load.audio('menuMusic', 'assets/audio/menu.mp3');
     this.load.audio('gameMusic1', 'assets/audio/game1.mp3');
     this.load.audio('gameMusic2', 'assets/audio/game2.mp3');
+    this.load.audio('eat', 'assets/audio/eat.mp3');
+    this.load.audio('drip', 'assets/audio/drip.mp3');
+    this.load.audio('fishBubble', 'assets/audio/fish-bubble.mp3');
   }
 
   createPreloader() {

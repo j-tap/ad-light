@@ -9,7 +9,7 @@ export default class StartScene extends BaseScene {
   }
 
   create() {
-    this.menuMusic = this.sound.add('menuMusic', { loop: true, volume: 0.5 });
+    this.menuMusic = this.sound.add('menuMusic', { loop: true, volume: 0.3 });
     this.menuMusic.play();
 
     this.scale.on('resize', this.resize, this);
@@ -20,6 +20,10 @@ export default class StartScene extends BaseScene {
         this.menuMusic.stop();
       }
     });
+
+    this.input.keyboard.on('keydown-ENTER', () => {
+      this.startGame();
+    })
   }
 
   createUI() {
@@ -38,7 +42,7 @@ export default class StartScene extends BaseScene {
       space: { left: 10, right: 10, top: 10, bottom: 10 }
     }).layout().setInteractive()
       .on('pointerdown', () => {
-        this.scene.start('GameScene');
+        this.startGame();
       });
   }
 
@@ -46,5 +50,9 @@ export default class StartScene extends BaseScene {
     if (this.startButton) {
       this.startButton.setPosition(this.centerX, this.centerY);
     }
+  }
+
+  startGame() {
+    this.scene.start('GameScene');
   }
 }
