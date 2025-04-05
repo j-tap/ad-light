@@ -1,0 +1,17 @@
+{
+  "author": "j-tap",
+  "name": "phaser-starter",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^3.88.2",
+    "phaser3-rex-plugins": "^1.80.15"
+  },
+  "devDependencies": {
+    "vite": "^6.2.5"
+  }
+}
