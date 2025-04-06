@@ -1,5 +1,5 @@
 import BaseScene from './BaseScene';
-import { creditsText } from '../credits.ts';
+import { creditsText } from '../credits';
 
 export default class EndScene extends BaseScene {
   endMusic!: Phaser.Sound.BaseSound;

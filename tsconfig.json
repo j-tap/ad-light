@@ -1,6 +1,9 @@
 {
   "compilerOptions": {
+    "target": "es6",
+    "moduleResolution": "node",
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "lib": ["dom", "es2015"]
   }
 }

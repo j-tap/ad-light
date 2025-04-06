@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 
 export default class PreloadScene extends Phaser.Scene {
-  private progressBar!: Phaser.GameObjects.Graphics;
-  private progressBox!: Phaser.GameObjects.Graphics;
+  private progressBar!: Phaser.GameObjects.Image;
+  private progressBox!: Phaser.GameObjects.Image;
   private loadingText!: Phaser.GameObjects.Text;
   private percentText!: Phaser.GameObjects.Text;
 
@@ -19,13 +19,28 @@ export default class PreloadScene extends Phaser.Scene {
   }
 
   preload() {
-    this.createPreloader();
-    this.loadAssets();
-    this.handleLoadingEvents();
+    this.load.image('loader', 'assets/images/loader.png');
+    this.load.image('loaderLine', 'assets/images/loader-line.png');
+
+    this.load.once('complete', () => {
+      this.createPreloader();
+      this.loadAssets();
+      this.handleLoadingEvents();
+
+      this.load.once('complete', () => {
+        this.time.delayedCall(500, () => {
+          this.scene.start('StartScene');
+        });
+      });
+
+      this.load.start();
+    });
+
+    this.load.start();
   }
 
   create() {
-    this.scene.start('StartScene');
+    //
   }
 
   loadAssets() {
@@ -39,7 +54,9 @@ export default class PreloadScene extends Phaser.Scene {
       frameHeight: 128,
     });
 
-    this.load.image('logo', 'assets/images/logo.png');
+    this.load.image('displacementTexture', 'assets/images/displacement-texture.jpg');
+    this.load.image('menuBg', 'assets/images/bg/menu-bg.png');
+    this.load.image('btn', 'assets/images/btn.png');
     this.load.image('backgroundFar', 'assets/images/bg/backgroundFar.png');
     this.load.image('backgroundNear', 'assets/images/bg/backgroundNear.png');
     this.load.image('mollusk', 'assets/images/mollusk.png');
@@ -56,21 +73,20 @@ export default class PreloadScene extends Phaser.Scene {
   }
 
   createPreloader() {
-    // Background
-    this.progressBox = this.add.graphics();
-    this.progressBox.fillStyle(0x000000, 0.2);
-    this.progressBox.fillRect(this.centerX - 160, this.centerY - 25, 320, 50);
+    this.progressBox = this.add.image(this.centerX, this.centerY, 'loader')
+      .setOrigin(0.5)
+      .setDisplaySize(320, 50);
 
-    // Line
-    this.progressBar = this.add.graphics();
+    this.progressBar = this.add.image(this.centerX - 150, this.centerY, 'loaderLine')
+      .setOrigin(0, 0.5)
+      .setDisplaySize(0, 30);
 
-    // Text
     this.loadingText = this.add.text(this.centerX, this.centerY - 50, 'Loading...', {
       fontSize: '20px',
       color: '#ffffff'
     }).setOrigin(0.5);
 
-    this.percentText = this.add.text(this.centerX, this.centerY, '0%', {
+    this.percentText = this.add.text(this.centerX, this.centerY + 50, '0%', {
       fontSize: '18px',
       color: '#ffffff'
     }).setOrigin(0.5);
@@ -78,9 +94,7 @@ export default class PreloadScene extends Phaser.Scene {
 
   handleLoadingEvents() {
     this.load.on('progress', (value: number) => {
-      this.progressBar.clear();
-      this.progressBar.fillStyle(0x000000, 0.5);
-      this.progressBar.fillRect(this.centerX - 150, this.centerY - 15, 300 * value, 30);
+      this.progressBar.setDisplaySize(300 * value, 30);
       this.percentText.setText(Math.floor(value * 100) + '%');
     });
 

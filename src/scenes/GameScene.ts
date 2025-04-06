@@ -12,7 +12,7 @@ export default class GameScene extends BaseScene {
   private currentMusic!: Phaser.Sound.BaseSound;
   private scoreText!: Phaser.GameObjects.Text;
   private levelWidth = 10000;
-  private hearts: string[] = [];
+  private hearts: Phaser.GameObjects.Text[] = [];
 
   constructor() {
     super('GameScene');
@@ -39,9 +39,9 @@ export default class GameScene extends BaseScene {
 
     this.cameras.main.postFX.addVignette(.5, .5, .8, 0)
 
-    this.scoreText = this.add.text(20, 20, 'Score: 0', {
-      fontSize: '32px',
-      color: '#ffffff',
+    this.scoreText = this.add.text(20, 20, 'Mollusks: 0/0', {
+      fontSize: '24px',
+      color: '#dcdcdc',
       fontFamily: 'Arial'
     }).setScrollFactor(0);
 
@@ -56,7 +56,7 @@ export default class GameScene extends BaseScene {
     this.player.update(time, delta);
     this.levelManager.update(time, delta);
 
-    this.scoreText.setText('Score: ' + this.gameManager.getScore());
+    this.scoreText.setText('Mollusks: ' + this.gameManager.getScore() + '/' + this.gameManager.getMolluskCount());
 
     this.updateHearts();
   }
@@ -144,22 +144,7 @@ export default class GameScene extends BaseScene {
   }
 
   createUI() {
-    this.rexUI.add.label({
-      x: this.centerX,
-      y: 30,
-      width: 150,
-      height: 50,
-      background: this.add.rectangle(0, 0, 150, 50, 0x3498db).setInteractive(),
-      text: this.add.text(0, 0, 'End', { fontSize: '24px', color: '#ffffff' }),
-      align: 'center',
-      space: { left: 10, right: 10, top: 10, bottom: 10 }
-    })
-      .layout()
-      .setInteractive()
-      .setScrollFactor(0)
-      .on('pointerdown', () => {
-        this.scene.start('EndScene');
-      });
+    //
   }
 
   createHearts() {
@@ -174,6 +159,7 @@ export default class GameScene extends BaseScene {
       const heart = this.add.text(startX + i * heartSpacing, startY, '❤️', {
         fontSize: '32px'
       })
+        .setAlpha(0.4)
         .setScrollFactor(0);
       this.hearts.push(heart);
     }

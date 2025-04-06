@@ -57,7 +57,7 @@ export class Enemy {
     return this.scene.lights.addLight(
       this.sprite.x + this.lightOffsetX,
       this.sprite.y + this.lightOffsetY,
-      32,
+      46,
       0xf0ff5e,
       10
     );
@@ -98,13 +98,13 @@ export class Enemy {
     });
   }
 
-  update(playerX?: number, playerY?: number) {
+  update(playerX?: number, playerY?: number, isPlayerAlive: boolean = true) {
     const mouthOffsetX = this.sprite.flipX ? -40 : 40;
     this.mouthCollider.setPosition(this.sprite.x + mouthOffsetX, this.sprite.y + 30);
 
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
 
-    if (playerX !== undefined && playerY !== undefined) {
+    if (playerX !== undefined && playerY !== undefined && isPlayerAlive) {
       this.chasePlayer(playerX, playerY);
     }
 

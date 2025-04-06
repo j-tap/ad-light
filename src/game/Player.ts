@@ -73,10 +73,6 @@ export class Player {
     this.wasMovingLastFrame = isInputActive;
 
     this.updateLight();
-
-    // if (this.sprite.body.velocity.x < 50) {
-    //   this.sprite.setVelocityX(50);
-    // }
   }
 
   private handleAnimations(isMoving: boolean) {
@@ -178,10 +174,10 @@ export class Player {
     this.bubbleEmitter.stop();
 
     this.sprite.setTexture('fishBone');
-    this.sprite.setTint(0x333333);
+    this.sprite.setTint(0x666666);
 
     this.sprite.setFlipY(true);
-    this.sprite.body.setAllowGravity(true);
+    (this.sprite.body as Phaser.Physics.Arcade.Body).allowGravity = true;
     this.sprite.setDrag(0.98);
     this.sprite.setAngularVelocity(Phaser.Math.Between(-30, 30));
     this.sprite.setVelocity(
@@ -194,15 +190,15 @@ export class Player {
   private createDeathParticles() {
     const particles = this.scene.add.particles(this.sprite.x, this.sprite.y, 'bubbleParticle', {
       lifespan: 1000,
-      speed: { min: 30, max: 80 }, // Медленнее
-      angle: { min: 220, max: 320 }, // Вверх и в стороны
-      scale: { start: 0.3, end: 1 }, // Растут как волны
-      alpha: { start: 1, end: 0 }, // Медленно исчезают
-      gravityY: -50, // Пузырьки медленно поднимаются
+      speed: { min: 30, max: 80 },
+      angle: { min: 220, max: 320 },
+      scale: { start: 0.3, end: 1 },
+      alpha: { start: 1, end: 0 },
+      gravityY: -50,
       blendMode: Phaser.BlendModes.ADD,
       emitting: false
     });
 
-    particles.explode(20); // Чуть больше частиц для эффекта волны
+    particles.explode(20);
   }
 }

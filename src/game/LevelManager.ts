@@ -29,10 +29,22 @@ export class LevelManager {
   }
 
   private createBackgroundLayer(texture: string) {
-    return this.scene.add.tileSprite(0, 0, this.scene.scale.width, this.scene.scale.height, texture)
-      .setOrigin(0)
+    const bg = this.scene.add.tileSprite(
+      0,
+      this.scene.scale.height,
+      this.scene.scale.width,
+      0,
+      texture,
+    )
+      .setOrigin(0, 1)
       .setScrollFactor(0)
       .setPipeline('Light2D');
+
+    const textureHeight = this.scene.textures.get(texture).getSourceImage().height;
+    const scaleY = this.scene.scale.height / textureHeight;
+    bg.setScale(1, scaleY);
+
+    return bg;
   }
 
   private createBackground() {
@@ -55,8 +67,9 @@ export class LevelManager {
       frequency: 800,
       gravityY: 0,
       blendMode: Phaser.BlendModes.ADD,
-      pipeline: 'Light2D',
     });
+
+    this.planktonEmitter.setPipeline('Light2D');
   }
 
   private createLighting() {

@@ -1,15 +1,17 @@
 import Phaser from 'phaser';
 
 export class Mollusk {
+  private scene: Phaser.Scene;
   private readonly sprite: Phaser.GameObjects.Sprite;
-  private light: Phaser.GameObjects.Light;
+  private readonly light: Phaser.GameObjects.Light;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
+    this.scene = scene;
     this.sprite = scene.add.sprite(x, y, 'mollusk')
       .setScale(0.5)
       .setPipeline('Light2D');
 
-    this.light = scene.lights.addLight(x, y, 100, 0x66ccff, 1.5);
+    this.light = scene.lights.addLight(x, y, 70, 0x66ccff, 1.5);
 
     scene.tweens.add({
       targets: this.sprite,
@@ -26,7 +28,7 @@ export class Mollusk {
   }
 
   destroy() {
+    this.scene.lights.removeLight(this.light);
     this.sprite.destroy();
-    this.light.destroy();
   }
 }

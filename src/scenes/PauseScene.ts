@@ -16,8 +16,23 @@ export default class PauseScene extends BaseScene {
   }
 
   createUI() {
-    this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.9)
+    const btnWidth = 220;
+    const btnHeight = 80;
+
+    this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.7)
       .setOrigin(0);
+
+    const backgroundResume = this.add.image(0, 0, 'btn')
+      .setDisplaySize(btnWidth, btnHeight)
+      .setInteractive()
+      .setOrigin(0.5)
+      .setPosition(this.centerX, this.centerY);
+
+    const backgroundExit = this.add.image(0, 0, 'btn')
+      .setDisplaySize(btnWidth, btnHeight)
+      .setInteractive()
+      .setOrigin(0.5)
+      .setPosition(this.centerX, this.centerY + 80);
 
     this.add.text(this.centerX, this.centerY - 100, 'PAUSED', {
       fontSize: '48px',
@@ -27,30 +42,46 @@ export default class PauseScene extends BaseScene {
     this.rexUI.add.label({
       x: this.centerX,
       y: this.centerY,
-      width: 200,
-      height: 60,
+      width: btnWidth,
+      height: btnHeight,
       align: 'center',
-      background: this.add.rectangle(0, 0, 200, 60, 0x3498db).setInteractive(),
-      text: this.add.text(0, 0, 'Resume', { fontSize: '24px', color: '#ffffff' }),
+      background: backgroundResume,
+      text: this.add.text(0, 0, 'Resume', { fontSize: '24px', color: '#dcdcdc' }),
       space: { left: 10, right: 10, top: 10, bottom: 10 }
-    }).layout().setInteractive()
+    })
+      .layout()
+      .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
         this.resume()
+      })
+      .on('pointerover', () => {
+        backgroundResume.setTint(0xcccccc);
+      })
+      .on('pointerout', () => {
+        backgroundResume.clearTint();
       });
 
     this.rexUI.add.label({
       x: this.centerX,
       y: this.centerY + 80,
-      width: 200,
-      height: 60,
+      width: btnWidth,
+      height: btnHeight,
       align: 'center',
-      background: this.add.rectangle(0, 0, 200, 60, 0xe74c3c).setInteractive(),
-      text: this.add.text(0, 0, 'Exit to Menu', { fontSize: '24px', color: '#ffffff' }),
+      background: backgroundExit,
+      text: this.add.text(0, 0, 'Exit to Menu', { fontSize: '24px', color: '#dcdcdc' }),
       space: { left: 10, right: 10, top: 10, bottom: 10 }
-    }).layout().setInteractive()
+    })
+      .layout()
+      .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
         this.scene.stop('GameScene');
         this.scene.start('StartScene');
+      })
+      .on('pointerover', () => {
+        backgroundExit.setTint(0xcccccc);
+      })
+      .on('pointerout', () => {
+        backgroundExit.clearTint();
       });
   }
 

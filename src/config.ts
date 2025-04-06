@@ -9,7 +9,7 @@ export const config: Phaser.Types.Core.GameConfig = {
   parent: 'game',
   physics: {
     default: 'arcade',
-    arcade: { debug: true }
+    arcade: { debug: false }
   },
   scene: [],
   plugins: {

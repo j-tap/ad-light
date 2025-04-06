@@ -16,7 +16,6 @@ export default class BaseScene extends Phaser.Scene {
     return this.scale.height / 2;
   }
 
-  // Можешь сразу добавить базовые функции
   fullscreenToggle() {
     if (this.scale.isFullscreen) {
       this.scale.stopFullscreen();
