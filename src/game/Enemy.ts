@@ -1,6 +1,5 @@
 import { BubbleEmitter } from './BubbleEmitter';
-
-const DISTANCE_TO_PLAYER = 300;
+import { config } from '../config';
 
 enum EnemyState {
   Idle,
@@ -9,6 +8,9 @@ enum EnemyState {
 
 export class Enemy {
   private scene: Phaser.Scene;
+  private readonly distanceVisible: number = config.enemy.anglerFish.distanceVision;
+  private readonly lightRadius: number = config.enemy.anglerFish.lightRadius;
+  private readonly speed: number = config.enemy.anglerFish.speed;
   private readonly sprite: Phaser.Physics.Arcade.Sprite;
   private light: Phaser.GameObjects.Light;
   private bubbleEmitter: BubbleEmitter;
@@ -57,9 +59,9 @@ export class Enemy {
     return this.scene.lights.addLight(
       this.sprite.x + this.lightOffsetX,
       this.sprite.y + this.lightOffsetY,
-      46,
+      this.lightRadius,
       0xf0ff5e,
-      10
+      10,
     );
   }
 
@@ -178,7 +180,7 @@ export class Enemy {
     const distance = Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, playerX, playerY);
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
 
-    if (distance < DISTANCE_TO_PLAYER) {
+    if (distance < this.distanceVisible) {
       if (this.state !== EnemyState.Chase) {
         this.state = EnemyState.Chase;
         if (this.randomMovementTimer) {
@@ -186,10 +188,9 @@ export class Enemy {
         }
       }
 
-      const angle = Phaser.Math.Angle.Between(this.sprite.x, this.sprite.y, playerX, playerY);
-      const speed = 80;
-      const velocityX = Math.cos(angle) * speed;
-      const velocityY = Math.sin(angle) * speed;
+      const angle = Phaser.Math.Angle.Between(this.sprite.x, this.sprite.y, playerX, playerY);;
+      const velocityX = Math.cos(angle) * this.speed;
+      const velocityY = Math.sin(angle) * this.speed;
 
       body.setVelocity(velocityX, velocityY);
       this.facePlayer(playerX);

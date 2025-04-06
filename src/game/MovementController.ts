@@ -60,8 +60,6 @@ export class MovementController {
     } else if (right.isDown || moveRight.isDown || this.touchVector.x > 0.2) {
       this.sprite.setVelocityX(speed);
       this.sprite.setFlipX(false);
-    } else {
-      this.sprite.setVelocityX(this.sprite.body.velocity.x * 0.95);
     }
   }
 
@@ -72,8 +70,6 @@ export class MovementController {
       this.sprite.setVelocityY(-speed);
     } else if (down.isDown || moveDown.isDown || this.touchVector.y > 0.2) {
       this.sprite.setVelocityY(speed);
-    } else {
-      this.sprite.setVelocityY(this.sprite.body.velocity.y * 0.95);
     }
   }
 

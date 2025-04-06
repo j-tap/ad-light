@@ -4,49 +4,36 @@ import { LevelManager } from '../game/LevelManager';
 import { GameManager } from '../game/GameManager';
 
 export default class GameScene extends BaseScene {
-  private gameManager!: GameManager;
-  private player!: Player;
-  private levelManager!: LevelManager;
-  private musicKeys = ['gameMusic1', 'gameMusic2'];
-  private currentTrackIndex = 0;
-  private currentMusic!: Phaser.Sound.BaseSound;
-  private scoreText!: Phaser.GameObjects.Text;
-  private levelWidth = 10000;
-  private hearts: Phaser.GameObjects.Text[] = [];
+  protected gameManager!: GameManager;
+  protected player!: Player;
+  protected levelManager!: LevelManager;
+  protected scoreText!: Phaser.GameObjects.Text;
+  protected hearts: Phaser.GameObjects.Text[] = [];
+  protected musicKeys = ['gameMusic1', 'gameMusic2'];
+  protected currentTrackIndex = 0;
+  protected currentMusic!: Phaser.Sound.BaseSound;
+  protected nextScene: string
+  protected levelWidth: number = 0;
+  protected enemyCount: number = 0;
+  protected molluskCount: number = 0;
 
-  constructor() {
-    super('GameScene');
+  constructor(key: string) {
+    super(key);
   }
 
   create() {
     this.gameManager = new GameManager(this);
-
     this.levelManager = new LevelManager(this);
-    this.levelManager.createLevel();
 
     this.createAnimations();
-    this.createPlayer(); // сначала игрок
-    this.createCamera();
-
-    this.gameManager.setPlayer(this.player);
-
     this.setupMusic();
     this.createUI();
     this.setupEvents();
-
-    this.gameManager.startGame();
-    this.gameManager.setupCollisions(this.player);
-
-    this.cameras.main.postFX.addVignette(.5, .5, .8, 0)
-
-    this.scoreText = this.add.text(20, 20, 'Mollusks: 0/0', {
-      fontSize: '24px',
-      color: '#dcdcdc',
-      fontFamily: 'Arial'
-    }).setScrollFactor(0);
-
-    this.createHearts();
+    this.createLevel();
+    this.setupPlayerUI();
   }
+
+  createLevel() {}
 
   update(time: number, delta: number) {
     this.gameManager.update(time, delta);
@@ -56,10 +43,12 @@ export default class GameScene extends BaseScene {
     this.player.update(time, delta);
     this.levelManager.update(time, delta);
 
-    this.scoreText.setText('Mollusks: ' + this.gameManager.getScore() + '/' + this.gameManager.getMolluskCount());
-
-    this.updateHearts();
+    this.updateUI();
   }
+
+  createUI() {}
+
+  updateUI() {}
 
   createAnimations() {
     const animations = [
@@ -77,19 +66,6 @@ export default class GameScene extends BaseScene {
     });
   }
 
-  createPlayer() {
-    this.player = new Player(this);
-    this.physics.world.gravity.y = 50;
-    this.physics.world.setBounds(0, 0, this.levelWidth, this.scale.height);
-  }
-
-  createCamera() {
-    this.cameras.main.setBounds(0, 0, this.levelWidth, this.scale.height);
-    this.cameras.main.startFollow(this.player.getSprite(), true, 0.08, 0.08);
-    this.cameras.main.setDeadzone(0, 100);
-    this.cameras.main.setBackgroundColor('#000000');
-  }
-
   setupMusic() {
     this.currentTrackIndex = Phaser.Math.Between(0, this.musicKeys.length - 1);
     this.playNextTrack();
@@ -101,7 +77,7 @@ export default class GameScene extends BaseScene {
     }
 
     const musicKey = this.musicKeys[this.currentTrackIndex];
-    this.currentMusic = this.sound.add(musicKey, { volume: 0.3 });
+    this.currentMusic = this.sound.add(musicKey, { volume: 0.25 });
     this.currentMusic.play();
 
     this.currentMusic.once('complete', () => {
@@ -124,13 +100,11 @@ export default class GameScene extends BaseScene {
     this.input.keyboard.on('keydown-ESC', () => {
       if (this.gameManager.isPlaying()) {
         this.gameManager.pauseGame();
-        this.scene.launch('PauseScene');
-        this.scene.pause();
       }
     });
 
     this.events.on('resume-game', () => {
-      this.gameManager.startGame();
+      this.gameManager.resumeGame();
       this.currentMusic?.resume();
     });
 
@@ -141,10 +115,21 @@ export default class GameScene extends BaseScene {
     this.events.on('shutdown', () => {
       this.currentMusic?.stop();
     });
+
+    this.events.on('player-died', () => {
+      this.currentMusic.stop();
+      this.gameManager.loseGame();
+    });
   }
 
-  createUI() {
-    //
+  setupPlayerUI() {
+    this.scoreText = this.add.text(20, 20, 'Mollusks: 0/0', {
+      fontSize: '24px',
+      color: '#dcdcdc',
+      fontFamily: 'Arial'
+    }).setScrollFactor(0);
+
+    this.createHearts();
   }
 
   createHearts() {
@@ -159,17 +144,16 @@ export default class GameScene extends BaseScene {
       const heart = this.add.text(startX + i * heartSpacing, startY, '❤️', {
         fontSize: '32px'
       })
-        .setAlpha(0.4)
+        .setAlpha(0.6)
         .setScrollFactor(0);
       this.hearts.push(heart);
     }
   }
 
-  updateHearts() {
-    if (!this.player) return;
-    const health = this.player.getHealth();
-    this.hearts.forEach((heart, index) => {
-      heart.setVisible(index < health);
+  startGame() {
+    this.gameManager.startGame({
+      enemyCount: this.enemyCount,
+      molluskCount: this.molluskCount,
     });
   }
 }

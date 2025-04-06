@@ -3,6 +3,11 @@ import { Enemy } from './Enemy';
 import { Mollusk } from './Mollusk';
 import { Player } from './Player';
 
+interface StartGameConfig {
+  enemyCount: number,
+  molluskCount: number,
+}
+
 export enum GameState {
   Start,
   Playing,
@@ -20,14 +25,10 @@ export class GameManager {
   private readonly mollusksGroup!: Phaser.Physics.Arcade.Group;
   private score = 0;
   private player!: Player;
-  enemyCount = 0;
   molluskCount = 0;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    const { width } = this.scene.physics.world.bounds;
-    this.enemyCount = Math.floor(width / 300);
-    this.molluskCount = Math.floor(width / 200);
 
     this.enemiesGroup = this.createPhysicsGroup();
     this.mollusksGroup = this.createPhysicsGroup();
@@ -49,20 +50,28 @@ export class GameManager {
     });
   }
 
-  startGame() {
+  startGame(config: StartGameConfig) {
+    this.molluskCount = config.molluskCount
     this.score = 0;
     this.state = GameState.Playing;
-    console.log('Game Started!');
 
-    (this.scene as any).playerDead = false;
-
-    this.spawnEnemies();
-    this.spawnMollusks();
+    this.spawnEnemies(config.enemyCount);
+    this.spawnMollusks(config.molluskCount);
   }
 
   pauseGame() {
     this.state = GameState.Paused;
-    console.log('Game Paused!');
+    this.scene.scene.launch('PauseScene', { target: this.scene.scene.key });
+    this.scene.scene.bringToTop('PauseScene');
+    this.scene.time.delayedCall(0, () => {
+      this.scene.scene.pause();
+    });
+  }
+
+  resumeGame() {
+    this.state = GameState.Playing;
+    this.scene.scene.stop('PauseScene');
+    this.scene.scene.resume(this.scene.scene.key);
   }
 
   winGame() {
@@ -71,19 +80,19 @@ export class GameManager {
     // this.scene.time.delayedCall(1000, () => {
     //   this.scene.scene.start('NextLevelScene');
     // });
-    this.scene.scene.start('EndScene');
+    this.scene.scene.start('WinScene');
   }
 
   loseGame() {
-    if (this.state !== GameState.Playing) return;
     this.state = GameState.Lose;
-    console.log('You Lose!');
-    this.scene.scene.start('StartScene');
+
+    this.scene.time.delayedCall(2500, () => {
+      this.scene.scene.start('GameOverScene');
+    });
   }
 
   addScore(amount: number) {
     this.score += amount;
-    console.log(`Score: ${this.score}`);
   }
 
   getScore(): number {
@@ -132,54 +141,26 @@ export class GameManager {
   private handlePlayerDeath() {
     const player = (this.scene as any).player;
 
-    if (!player || (this.scene as any).playerDead || !player.isAlive()) return;
+    if (!player || !player.isAlive()) return;
 
     if (typeof player.canInvulnerable === 'function' && player.canInvulnerable()) {
       return;
     }
 
-    const eatSound = this.scene.sound.add('eat', { volume: 0.3 });
+    const eatSound = this.scene.sound.add('eat', { volume: 0.5 });
     eatSound.play();
 
     player.takeDamage(1);
-
-    if (player.getHealth() <= 0) {
-      (this.scene as any).playerDead = true;
-      this.showDeathText();
-
-      this.scene.time.delayedCall(3000, () => {
-        this.loseGame();
-      });
-    }
   }
 
-  private showDeathText() {
-    const { width, height } = this.scene.scale;
-
-    const text = this.scene.add.text(width / 2, height / 2, 'You Died', {
-      fontSize: '48px',
-      color: '#ff4444',
-      fontFamily: 'Arial'
-    })
-      .setOrigin(0.5)
-      .setScrollFactor(0);
-
-    this.scene.tweens.add({
-      targets: text,
-      alpha: { from: 0, to: 1 },
-      duration: 500,
-      ease: 'Sine.easeInOut'
-    });
-  }
-
-  private spawnEnemies() {
+  private spawnEnemies(enemyCount: number) {
     const { width, height } = this.scene.physics.world.bounds;
     const playerSprite = this.player.getSprite();
     const playerX = playerSprite.x;
     const playerY = playerSprite.y;
     const minDistance = 300;
 
-    for (let i = 0; i < this.enemyCount; i++) {
+    for (let i = 0; i < enemyCount; i++) {
       let x: number, y: number, tries = 0;
 
       do {
@@ -194,10 +175,10 @@ export class GameManager {
     }
   }
 
-  private spawnMollusks() {
+  private spawnMollusks(molluskCount: number) {
     const bounds = this.scene.physics.world.bounds;
 
-    for (let i = 0; i < this.molluskCount; i++) {
+    for (let i = 0; i < molluskCount; i++) {
       const x = Phaser.Math.Between(bounds.left + 100, bounds.right - 100);
       const y = Phaser.Math.Between(bounds.height - 120, bounds.height - 60);
 
@@ -211,6 +192,10 @@ export class GameManager {
     playerBody: Phaser.Types.Physics.Arcade.GameObjectWithBody,
     molluskBody: Phaser.Types.Physics.Arcade.GameObjectWithBody
   ) {
+    const player = (this.scene as any).player;
+
+    if (!player.isAlive()) return
+
     const molluskSprite = molluskBody as Phaser.GameObjects.Sprite;
     const mollusk = this.mollusks.find(o => o.getSprite() === molluskSprite);
 

@@ -1,5 +1,10 @@
 import Phaser from 'phaser';
 
+interface LevelCreateConfig {
+  backgroundFar: string,
+  backgroundNear: string,
+}
+
 export class LevelManager {
   private scene: Phaser.Scene;
   private backgroundFar!: Phaser.GameObjects.TileSprite;
@@ -10,8 +15,8 @@ export class LevelManager {
     this.scene = scene;
   }
 
-  createLevel() {
-    this.createBackground();
+  createLevel(config: LevelCreateConfig) {
+    this.createBackground(config.backgroundFar, config.backgroundNear);
     this.createPlanktonEmitter();
     this.createLighting();
   }
@@ -47,9 +52,11 @@ export class LevelManager {
     return bg;
   }
 
-  private createBackground() {
-    this.backgroundFar = this.createBackgroundLayer('backgroundFar');
-    this.backgroundNear = this.createBackgroundLayer('backgroundNear');
+  private createBackground(far: string, near: string) {
+    this.backgroundFar = this.createBackgroundLayer(far);
+    this.backgroundFar.postFX.addBlur()
+
+    this.backgroundNear = this.createBackgroundLayer(near);
   }
 
   private createPlanktonEmitter() {

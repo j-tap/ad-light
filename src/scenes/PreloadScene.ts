@@ -56,17 +56,21 @@ export default class PreloadScene extends Phaser.Scene {
 
     this.load.image('displacementTexture', 'assets/images/displacement-texture.jpg');
     this.load.image('menuBg', 'assets/images/bg/menu-bg.png');
+    this.load.image('deadBg', 'assets/images/bg/dead-bg.png');
+    this.load.image('winBg', 'assets/images/bg/win-bg.png');
     this.load.image('btn', 'assets/images/btn.png');
-    this.load.image('backgroundFar', 'assets/images/bg/backgroundFar.png');
     this.load.image('backgroundNear', 'assets/images/bg/backgroundNear.png');
     this.load.image('mollusk', 'assets/images/mollusk.png');
     this.load.image('fishBone', 'assets/images/fish-bone.png');
     this.load.image('bubbleParticle', 'assets/images/bubble-particle.png');
     this.load.image('planktonParticle', 'assets/images/plankton-particle.png');
 
-    this.load.audio('menuMusic', 'assets/audio/menu.mp3');
-    this.load.audio('gameMusic1', 'assets/audio/game1.mp3');
-    this.load.audio('gameMusic2', 'assets/audio/game2.mp3');
+    this.load.image('level1Bg', 'assets/images/bg/level-1-bg.png');
+
+    this.load.audio('menuMusic', 'assets/audio/music/menu.mp3');
+    this.load.audio('gameMusic1', 'assets/audio/music/game1.mp3');
+    this.load.audio('gameMusic2', 'assets/audio/music/game2.mp3');
+    this.load.audio('depth', 'assets/audio/depth.mp3');
     this.load.audio('eat', 'assets/audio/eat.mp3');
     this.load.audio('drip', 'assets/audio/drip.mp3');
     this.load.audio('fishBubble', 'assets/audio/fish-bubble.mp3');

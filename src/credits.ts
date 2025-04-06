@@ -1,10 +1,20 @@
 export const creditsText = `
-Creator:          j-tap
+Creator:
+j-tap
 
-Music in menu:    Brylie Christopher Oxley - Everyting Tastes Different
+Art:
+j-tap & DALL-E & Gimp
 
-Music in game:    Brylie Christopher Oxley - Bustling Sunrise
-                  Brylie Christopher Oxley - Mossy Reclamation
+Musics:
+Brylie Christopher Oxley - Everyting Tastes Different
+Brylie Christopher Oxley - Bustling Sunrise
+Brylie Christopher Oxley - Mossy Reclamation
+
+Sounds:
+freesound.org & Audacity
+
+Engine:
+PhaserJS
 
 Thanks Ludum Dare 57
 `;

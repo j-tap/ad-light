@@ -2,7 +2,7 @@ import BaseScene from './BaseScene';
 import { creditsText } from '../credits';
 
 export default class EndScene extends BaseScene {
-  endMusic!: Phaser.Sound.BaseSound;
+  private music!: Phaser.Sound.BaseSound;
   private container!: Phaser.GameObjects.Container;
   private scrollSpeed = 50;
 
@@ -11,8 +11,8 @@ export default class EndScene extends BaseScene {
   }
 
   create() {
-    this.endMusic = this.sound.add('menuMusic', { loop: true, volume: 0.3 });
-    this.endMusic.play();
+    this.music = this.sound.add('menuMusic', { loop: true, volume: 0.3 });
+    this.music.play();
 
     this.createUI()
 
@@ -26,8 +26,8 @@ export default class EndScene extends BaseScene {
     })
 
     this.events.on('shutdown', () => {
-      if (this.endMusic && this.endMusic.isPlaying) {
-        this.endMusic.stop();
+      if (this.music && this.music.isPlaying) {
+        this.music.stop();
       }
     });
   }
@@ -36,7 +36,7 @@ export default class EndScene extends BaseScene {
     const dy = (this.scrollSpeed * delta) / 1000;
     this.container.y -= dy;
 
-    if (this.container.y < -200) {
+    if (this.container.getBounds().bottom < 0) {
       this.nextScene()
     }
   }
@@ -52,18 +52,15 @@ export default class EndScene extends BaseScene {
   }
 
   createUI() {
-    const title = this.add.text(0, 0, 'Congratulations!', {
-      fontSize: '48px',
-      color: '#ffffff'
-    }).setOrigin(0.5, 0);
-
     const credits = this.add.text(0, 100, creditsText, {
-      fontSize: '16px',
-      color: '#ffffff',
-      align: 'left',
-    }).setOrigin(0.5, 0);
+      fontSize: '18px',
+      fontFamily: 'Arial',
+      color: '#dcdcdc',
+      align: 'center',
+    })
+      .setOrigin(0.5, 0);
 
-    this.container = this.add.container(this.centerX, this.centerY, [title, credits]);
+    this.container = this.add.container(this.centerX, this.centerY, [credits]);
     this.container.setDepth(1);
   }
 }
