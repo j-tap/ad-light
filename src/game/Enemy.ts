@@ -19,6 +19,7 @@ export class Enemy {
   private readonly lightOffsetY = -20;
   private randomMovementTimer: Phaser.Time.TimerEvent;
   private state: EnemyState = EnemyState.Idle;
+  private canAttack = true;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
@@ -61,7 +62,7 @@ export class Enemy {
       this.sprite.y + this.lightOffsetY,
       this.lightRadius,
       0xf0ff5e,
-      1,
+      4,
     );
   }
 
@@ -73,7 +74,7 @@ export class Enemy {
     });
 
     this.randomMovementTimer = this.scene.time.addEvent({
-      delay: 2000,
+      delay: Phaser.Math.Between(5000, 15000),
       loop: true,
       callback: () => {
         if (this.state === EnemyState.Idle) {
@@ -106,10 +107,7 @@ export class Enemy {
 
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
 
-    if (playerX !== undefined && playerY !== undefined && isPlayerAlive) {
-      this.chasePlayer(playerX, playerY);
-    }
-
+    this.updateChase(playerX, playerY, isPlayerAlive);
     this.updateFlipAndOffset();
     this.updateLightPosition();
     this.keepInsideBounds(body);
@@ -130,6 +128,27 @@ export class Enemy {
     return this.mouthCollider;
   }
 
+  onPlayerHit() {
+    if (!this.canAttack || (this.sprite.frame as any).name === 3) return;
+
+    this.canAttack = false;
+    this.sprite.setFrame(3);
+
+    this.scene.time.delayedCall(250, () => {
+      this.sprite.anims.play('enemy-swim');
+    });
+
+    this.scene.time.delayedCall(1000, () => {
+      this.canAttack = true;
+    });
+  }
+
+  private updateChase(playerX: number, playerY: number, isPlayerAlive: boolean) {
+    if (playerX !== undefined && playerY !== undefined && isPlayerAlive && this.canAttack) {
+      this.chasePlayer(playerX, playerY);
+    }
+  }
+
   private updateFlipAndOffset() {
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
     const flip = body.velocity.x < 0;
@@ -142,19 +161,11 @@ export class Enemy {
   }
 
   private keepInsideBounds(body: Phaser.Physics.Arcade.Body) {
-    const bounds = this.scene.physics.world.bounds;
+    const { left, right, top, bottom } = this.scene.physics.world.bounds;
+    const { sprite } = this;
 
-    if (this.sprite.x < bounds.left) {
-      this.sprite.x = bounds.left + 10;
-    } else if (this.sprite.x > bounds.right) {
-      this.sprite.x = bounds.right - 10;
-    }
-
-    if (this.sprite.y < bounds.top) {
-      this.sprite.y = bounds.top + 10;
-    } else if (this.sprite.y > bounds.bottom) {
-      this.sprite.y = bounds.bottom - 10;
-    }
+    sprite.x = Phaser.Math.Clamp(sprite.x, left + 10, right - 10);
+    sprite.y = Phaser.Math.Clamp(sprite.y, top + 10, bottom - 10);
   }
 
   private createMouthCollider() {
@@ -169,39 +180,35 @@ export class Enemy {
   }
 
   private facePlayer(playerX: number) {
-    if (playerX < this.sprite.x) {
-      this.sprite.setFlipX(true);
-    } else {
-      this.sprite.setFlipX(false);
+    const distanceX = playerX - this.sprite.x;
+
+    if (Math.abs(distanceX) > 30) {
+      this.sprite.setFlipX(distanceX < 0);
     }
   }
 
   private chasePlayer(playerX: number, playerY: number) {
-    const distance = Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, playerX, playerY);
+    const { x, y } = this.sprite;
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+    const distance = Phaser.Math.Distance.Between(x, y, playerX, playerY);
 
     if (distance < this.distanceVisible) {
       if (this.state !== EnemyState.Chase) {
-        this.state = EnemyState.Chase;
-        if (this.randomMovementTimer) {
-          this.randomMovementTimer.paused = true;
-        }
+        this.setState(EnemyState.Chase, true);
       }
 
-      const angle = Phaser.Math.Angle.Between(this.sprite.x, this.sprite.y, playerX, playerY);;
-      const velocityX = Math.cos(angle) * this.speed;
-      const velocityY = Math.sin(angle) * this.speed;
-
-      body.setVelocity(velocityX, velocityY);
+      const angle = Phaser.Math.Angle.Between(x, y, playerX, playerY);
+      body.setVelocity(Math.cos(angle) * this.speed, Math.sin(angle) * this.speed);
       this.facePlayer(playerX);
+    } else if (this.state !== EnemyState.Idle) {
+      this.setState(EnemyState.Idle, false);
+    }
+  }
 
-    } else {
-      if (this.state !== EnemyState.Idle) {
-        this.state = EnemyState.Idle;
-        if (this.randomMovementTimer) {
-          this.randomMovementTimer.paused = false;
-        }
-      }
+  private setState(state: EnemyState, pauseRandom: boolean) {
+    this.state = state;
+    if (this.randomMovementTimer) {
+      this.randomMovementTimer.paused = pauseRandom;
     }
   }
 }

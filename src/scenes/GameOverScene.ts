@@ -8,9 +8,14 @@ export default class GameOverScene extends BaseScene {
   private bg!: Phaser.GameObjects.Image;
   private bubbleEmitter: BubbleEmitter;
   private music: Phaser.Sound.BaseSound;
+  private lastLevel: string;
 
   constructor() {
     super('GameOverScene');
+  }
+
+  init(data: { level: string }) {
+    this.lastLevel = data.level;
   }
 
   create() {
@@ -44,7 +49,7 @@ export default class GameOverScene extends BaseScene {
       .setScrollFactor(0);
 
     const btn1 = this.gui.createButton(this.centerX, text.y + text.height + 60, 'Again', () => {
-      this.fadeToScene('Level1Scene');
+      this.fadeToScene(this.lastLevel);
     });
     this.gui.createButton(this.centerX, btn1.y + btn1.height + 15, 'Exit to Menu', () => {
       this.fadeToScene('StartScene');

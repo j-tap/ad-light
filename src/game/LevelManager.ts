@@ -2,13 +2,15 @@ import Phaser from 'phaser';
 
 interface LevelCreateConfig {
   backgroundFar: string,
-  backgroundNear: string,
+  background: string,
+  foreground: string,
 }
 
 export class LevelManager {
   private scene: Phaser.Scene;
   private backgroundFar!: Phaser.GameObjects.TileSprite;
-  private backgroundNear!: Phaser.GameObjects.TileSprite;
+  private background!: Phaser.GameObjects.TileSprite;
+  private foreground!: Phaser.GameObjects.TileSprite;
   private planktonEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
 
   constructor(scene: Phaser.Scene) {
@@ -16,14 +18,13 @@ export class LevelManager {
   }
 
   createLevel(config: LevelCreateConfig) {
-    this.createBackground(config.backgroundFar, config.backgroundNear);
+    this.createBackground(config.backgroundFar, config.background, config.foreground);
     this.createPlanktonEmitter();
     this.createLighting();
   }
 
-  update(time: number, delta: number) {
+  update() {
     this.backgroundFar.tilePositionX = this.scene.cameras.main.scrollX * 0.2;
-    this.backgroundNear.tilePositionX = this.scene.cameras.main.scrollX * 0.5;
 
     if (this.planktonEmitter) {
       this.planktonEmitter.setPosition(
@@ -33,32 +34,55 @@ export class LevelManager {
     }
   }
 
-  private createBackgroundLayer(texture: string) {
-    const textureImage = this.scene.textures.get(texture).getSourceImage();
-    const textureWidth = textureImage.width;
-    const textureHeight = textureImage.height;
-    const scaleX = this.scene.scale.width / textureWidth;
-    const scaleY = this.scene.scale.height / textureHeight;
-    const scale = Math.max(scaleX, scaleY);
-
-    return this.scene.add.tileSprite(
-      0,
-      this.scene.scale.height,
-      textureWidth,
-      textureHeight,
-      texture
-    )
-      .setOrigin(0, 1)
-      .setScrollFactor(0)
-      .setPipeline('Light2D')
-      .setScale(scale);
-  }
-
-  private createBackground(far: string, near: string) {
+  private createBackground(far: string, bg: string, fg: string) {
     this.backgroundFar = this.createBackgroundLayer(far);
     this.backgroundFar.postFX.addBlur(1)
 
-    this.backgroundNear = this.createBackgroundLayer(near);
+    this.background = this.createBackgroundLayer(bg, true);
+    this.foreground = this.createBackgroundLayer(fg, true, true);
+  }
+
+  private createBackgroundLayer(texture: string, isStatic = false, isForeground = false) {
+    const textureImage = this.scene.textures.get(texture).getSourceImage();
+    const textureWidth = textureImage.width;
+    const textureHeight = textureImage.height;
+    let bg: Phaser.GameObjects.TileSprite;
+
+    if (isStatic) {
+      bg = this.scene.add.tileSprite(
+        0,
+        this.scene.scale.height,
+        this.scene.physics.world.bounds.width,
+        textureHeight,
+        texture
+      )
+        .setScrollFactor(1)
+        .setTileScale(1, 1);
+    } else {
+      const scaleX = this.scene.scale.width / textureWidth;
+      const scaleY = this.scene.scale.height / textureHeight;
+      const scale = Math.max(scaleX, scaleY);
+
+      bg = this.scene.add.tileSprite(
+        0,
+        this.scene.scale.height,
+        textureWidth,
+        textureHeight,
+        texture
+      )
+        .setScrollFactor(0)
+        .setScale(scale);
+    }
+
+    bg
+      .setPipeline('Light2D')
+      .setOrigin(0, 1);
+
+    if (isForeground) {
+      bg.setDepth(10);
+    }
+
+    return bg;
   }
 
   private createPlanktonEmitter() {

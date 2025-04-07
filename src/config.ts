@@ -3,7 +3,7 @@ import UIPlugin from 'phaser3-rex-plugins/templates/ui/ui-plugin.js';
 
 export const config = {
   player: {
-    maxHealth: 1,
+    maxHealth: 3,
     speed: 260,
     lightRadius: 350,
   },
@@ -20,8 +20,18 @@ export const config = {
   levels: {
     1: {
       enemyCount: 6,
-      molluskCount: 5,
-      width: 5000,
+      molluskCount: 1,
+      width: 2000,
+    },
+    2: {
+      enemyCount: 10,
+      molluskCount: 10,
+      width: 10000,
+    },
+    3: {
+      enemyCount: 15,
+      molluskCount: 15,
+      width: 15000,
     }
   }
 }

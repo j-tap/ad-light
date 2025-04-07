@@ -4,19 +4,20 @@ import { LevelManager } from '../game/LevelManager';
 import { GameManager } from '../game/GameManager';
 
 export default class GameScene extends BaseScene {
+  protected readonly cameraBackgroundColor = '#000000';
   protected gameManager!: GameManager;
   protected player!: Player;
   protected levelManager!: LevelManager;
+  protected ground!: Phaser.Physics.Arcade.StaticGroup;
   protected scoreText!: Phaser.GameObjects.Text;
   protected hearts: Phaser.GameObjects.Text[] = [];
   protected musicKeys = [];
   protected currentTrackIndex = 0;
   protected currentMusic!: Phaser.Sound.BaseSound;
-  protected nextScene: string
-  protected readonly cameraBackgroundColor = '#000000';
   protected levelWidth: number = 0;
   protected enemyCount: number = 0;
   protected molluskCount: number = 0;
+  public nextScene: string
 
   constructor(key: string) {
     super(key);
@@ -25,6 +26,7 @@ export default class GameScene extends BaseScene {
   create() {
     this.gameManager = new GameManager(this);
     this.levelManager = new LevelManager(this);
+    this.gameManager.setCurrentLevel(this.scene.key);
 
     this.createAnimations();
     this.setupMusic();
@@ -32,6 +34,7 @@ export default class GameScene extends BaseScene {
     this.setupEvents();
     this.createLevel();
     this.setupPlayerUI();
+    this.setupCollisions();
     this.fadeIn();
   }
 
@@ -43,7 +46,7 @@ export default class GameScene extends BaseScene {
     if (!this.gameManager.isPlaying()) return;
 
     this.player.update(time, delta);
-    this.levelManager.update(time, delta);
+    this.levelManager.update();
 
     this.updateUI();
   }
@@ -53,18 +56,28 @@ export default class GameScene extends BaseScene {
   updateUI() {}
 
   createAnimations() {
-    const animations = [
-      { key: 'swim', texture: 'player', frameRate: 8 },
-      { key: 'enemy-swim', texture: 'enemy1', frameRate: 6 },
-    ];
+    this.anims.create({
+      key: 'swim',
+      frames: this.anims.generateFrameNumbers('player', { start: 0, end: 2 }),
+      frameRate: 8,
+      repeat: -1,
+    });
 
-    animations.forEach(({ key, texture, frameRate }) => {
-      this.anims.create({
-        key,
-        frames: this.anims.generateFrameNumbers(texture, { start: 0, end: 3 }),
-        frameRate,
-        repeat: -1
-      });
+    this.anims.create({
+      key: 'enemy-swim',
+      frames: this.anims.generateFrameNumbers('enemy1', { start: 0, end: 2 }),
+      frameRate: 6,
+      repeat: -1,
+    });
+
+    this.anims.create({
+      key: 'enemy-attack',
+      frames: [
+        { key: 'enemy1', frame: 2 },
+        { key: 'enemy1', frame: 3 },
+      ],
+      frameRate: 6,
+      repeat: 1,
     });
   }
 
@@ -123,16 +136,13 @@ export default class GameScene extends BaseScene {
       this.gameManager.loseGame();
 
       this.time.delayedCall(2500, () => {
-        this.fadeToScene('GameOverScene');
+        this.fadeToScene('GameOverScene', { level: this.gameManager.getLastLevel() });
       });
     });
 
     this.events.on('player-win', () => {
-      // this.scene.time.delayedCall(1000, () => {
-      //   this.toScene('NextLevelScene');
-      // });
       this.time.delayedCall(500, () => {
-        this.fadeToScene('WinScene');
+        this.fadeToScene(this.nextScene);
       });
     });
   }
@@ -180,5 +190,9 @@ export default class GameScene extends BaseScene {
       enemyCount: this.enemyCount,
       molluskCount: this.molluskCount,
     });
+  }
+
+  private setupCollisions() {
+    this.physics.add.collider(this.player.getSprite(), this.ground);
   }
 }

@@ -255,7 +255,7 @@ export class Player {
       .setOrigin(0.5)
       .setAlpha(0.4)
       .setScale(0.1)
-      .setDepth(5)
+      .setToTop()
       .setAngle(angle);
 
     sprite.postFX.addBlur(10);

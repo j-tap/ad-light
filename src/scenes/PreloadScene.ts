@@ -60,6 +60,7 @@ export default class PreloadScene extends BaseScene {
     this.load.image('fishBone', 'assets/images/fish-bone.png');
     this.load.image('planktonParticle', 'assets/images/plankton-particle.png');
 
+    this.load.image('level1BgFar', 'assets/images/bg/level-1-bg-far.png');
     this.load.image('level1Bg', 'assets/images/bg/level-1-bg.png');
     this.load.image('level1Fg', 'assets/images/bg/level-1-fg.png');
 

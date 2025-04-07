@@ -18,14 +18,15 @@ export enum GameState {
 
 export class GameManager {
   private readonly scene: Phaser.Scene;
+  private readonly enemiesGroup!: Phaser.Physics.Arcade.Group;
+  private readonly mollusksGroup!: Phaser.Physics.Arcade.Group;
   private state: GameState = GameState.Start;
   private enemies: Enemy[] = [];
   private mollusks: Mollusk[] = [];
-  private readonly enemiesGroup!: Phaser.Physics.Arcade.Group;
-  private readonly mollusksGroup!: Phaser.Physics.Arcade.Group;
   private score = 0;
   private player!: Player;
-  molluskCount = 0;
+  private lastLevel: string;
+  public molluskCount = 0;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -126,10 +127,19 @@ export class GameManager {
     this.enemies.forEach(enemy => {
       this.scene.physics.add.overlap(player.getSprite(), enemy.getMouthCollider(), () => {
         this.handlePlayerDeath();
+        enemy.onPlayerHit();
       });
     });
 
     this.scene.physics.add.overlap(player.getSprite(), this.mollusksGroup, this.collectMollusk, undefined, this);
+  }
+
+  setCurrentLevel(levelKey: string) {
+    this.lastLevel = levelKey;
+  }
+
+  getLastLevel() {
+    return this.lastLevel;
   }
 
   private handlePlayerDeath() {
@@ -174,7 +184,7 @@ export class GameManager {
 
     for (let i = 0; i < molluskCount; i++) {
       const x = Phaser.Math.Between(bounds.left + 100, bounds.right - 100);
-      const y = Phaser.Math.Between(bounds.height - 120, bounds.height - 60);
+      const y = Phaser.Math.Between(bounds.height - 70, bounds.height - 45);
 
       const mollusk = new Mollusk(this.scene, x, y);
       this.mollusks.push(mollusk);
