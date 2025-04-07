@@ -147,7 +147,7 @@ export class Player {
       this.sprite.y,
       this.lightRadius,
       0xcff1ff,
-      2
+      1
     );
 
     this.createTextures()

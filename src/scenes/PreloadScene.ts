@@ -58,15 +58,25 @@ export default class PreloadScene extends BaseScene {
     this.load.image('btn', 'assets/images/btn.png');
     this.load.image('mollusk', 'assets/images/mollusk.png');
     this.load.image('fishBone', 'assets/images/fish-bone.png');
+    this.load.image('kraken', 'assets/images/enemy-kraken.png');
     this.load.image('planktonParticle', 'assets/images/plankton-particle.png');
 
     this.load.image('level1BgFar', 'assets/images/bg/level-1-bg-far.png');
     this.load.image('level1Bg', 'assets/images/bg/level-1-bg.png');
     this.load.image('level1Fg', 'assets/images/bg/level-1-fg.png');
 
+    this.load.image('level2BgFar', 'assets/images/bg/level-2-bg-far.png');
+    this.load.image('level2Bg', 'assets/images/bg/level-2-bg.png');
+    this.load.image('level2Fg', 'assets/images/bg/level-2-fg.png');
+
+    this.load.image('level3BgFar', 'assets/images/bg/level-3-bg-far.png');
+    this.load.image('level3Bg', 'assets/images/bg/level-3-bg.png');
+    this.load.image('level3Fg', 'assets/images/bg/level-3-fg.png');
+
     this.load.audio('menuMusic', 'assets/audio/music/menu.mp3');
-    this.load.audio('gameMusic1', 'assets/audio/music/game2.mp3');
-    this.load.audio('gameMusic2', 'assets/audio/music/game1.mp3');
+    this.load.audio('gameMusic2', 'assets/audio/music/game2.mp3');
+    this.load.audio('gameMusic3', 'assets/audio/music/game1.mp3');
+    this.load.audio('gameMusic1', 'assets/audio/music/game3.mp3');
     this.load.audio('victory', 'assets/audio/music/victory.mp3');
     this.load.audio('depth', 'assets/audio/depth.mp3');
     this.load.audio('eat', 'assets/audio/eat.mp3');

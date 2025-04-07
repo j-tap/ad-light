@@ -10,10 +10,11 @@ export default class GameScene extends BaseScene {
   protected levelManager!: LevelManager;
   protected ground!: Phaser.Physics.Arcade.StaticGroup;
   protected scoreText!: Phaser.GameObjects.Text;
+  protected currentMusic!: Phaser.Sound.BaseSound;
   protected hearts: Phaser.GameObjects.Text[] = [];
   protected musicKeys = [];
   protected currentTrackIndex = 0;
-  protected currentMusic!: Phaser.Sound.BaseSound;
+  protected ambientColor: number = 0x1a2a6c;
   protected levelWidth: number = 0;
   protected enemyCount: number = 0;
   protected molluskCount: number = 0;
@@ -28,6 +29,7 @@ export default class GameScene extends BaseScene {
     this.levelManager = new LevelManager(this);
     this.gameManager.setCurrentLevel(this.scene.key);
 
+    this.createLighting();
     this.createAnimations();
     this.setupMusic();
     this.createUI();
@@ -190,6 +192,10 @@ export default class GameScene extends BaseScene {
       enemyCount: this.enemyCount,
       molluskCount: this.molluskCount,
     });
+  }
+
+  private createLighting() {
+    this.lights.enable().setAmbientColor(this.ambientColor);
   }
 
   private setupCollisions() {

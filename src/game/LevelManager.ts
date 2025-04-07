@@ -12,6 +12,7 @@ export class LevelManager {
   private background!: Phaser.GameObjects.TileSprite;
   private foreground!: Phaser.GameObjects.TileSprite;
   private planktonEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private needPlankton: boolean = true;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -19,12 +20,15 @@ export class LevelManager {
 
   createLevel(config: LevelCreateConfig) {
     this.createBackground(config.backgroundFar, config.background, config.foreground);
-    this.createPlanktonEmitter();
-    this.createLighting();
+
+    if (this.needPlankton) {
+      this.createPlanktonEmitter();
+    }
   }
 
   update() {
     this.backgroundFar.tilePositionX = this.scene.cameras.main.scrollX * 0.2;
+    this.foreground.tilePositionX = this.scene.cameras.main.scrollX * 4;
 
     if (this.planktonEmitter) {
       this.planktonEmitter.setPosition(
@@ -34,12 +38,16 @@ export class LevelManager {
     }
   }
 
+  setNeedPlankton(needPlankton: boolean) {
+    this.needPlankton = needPlankton;
+  }
+
   private createBackground(far: string, bg: string, fg: string) {
     this.backgroundFar = this.createBackgroundLayer(far);
-    this.backgroundFar.postFX.addBlur(1)
+    this.backgroundFar.postFX.addBlur(.8)
 
     this.background = this.createBackgroundLayer(bg, true);
-    this.foreground = this.createBackgroundLayer(fg, true, true);
+    this.foreground = this.createBackgroundLayer(fg, false, true);
   }
 
   private createBackgroundLayer(texture: string, isStatic = false, isForeground = false) {
@@ -103,9 +111,5 @@ export class LevelManager {
     });
 
     this.planktonEmitter.setPipeline('Light2D');
-  }
-
-  private createLighting() {
-    this.scene.lights.enable().setAmbientColor(0x1a2a6c);
   }
 }

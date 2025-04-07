@@ -12,7 +12,7 @@ export default class Level1Scene extends GameScene {
     this.levelWidth = config.levels[2].width
     this.enemyCount = config.levels[2].enemyCount
     this.molluskCount = config.levels[2].molluskCount
-    this.nextScene = 'WinScene';
+    this.nextScene = 'Level3Scene';
     this.musicKeys = ['gameMusic2'];
   }
 

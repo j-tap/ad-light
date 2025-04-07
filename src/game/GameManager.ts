@@ -151,8 +151,7 @@ export class GameManager {
       return;
     }
 
-    const eatSound = this.scene.sound.add('eat', { volume: 0.5 });
-    eatSound.play();
+    this.scene.sound.add('eat', { volume: 0.5 }).play();
 
     player.takeDamage(1);
   }
@@ -184,7 +183,7 @@ export class GameManager {
 
     for (let i = 0; i < molluskCount; i++) {
       const x = Phaser.Math.Between(bounds.left + 100, bounds.right - 100);
-      const y = Phaser.Math.Between(bounds.height - 70, bounds.height - 45);
+      const y = Phaser.Math.Between(bounds.top + 100, bounds.height - 50);
 
       const mollusk = new Mollusk(this.scene, x, y);
       this.mollusks.push(mollusk);

@@ -1,11 +1,13 @@
 import GameScene from '../GameScene';
 import { Player } from '../../game/Player';
 import { config } from '../../config';
+import { EnemyKraken } from '../../game/enemies/Kraken';
 
 export default class Level1Scene extends GameScene {
   protected readonly levelBackgroundFar: string = 'level3BgFar';
   protected readonly levelBackground: string = 'level3Bg';
   protected readonly levelForeground: string = 'level3Fg';
+  protected kraken: EnemyKraken;
 
   constructor() {
     super('Level3Scene');
@@ -16,10 +18,19 @@ export default class Level1Scene extends GameScene {
     this.musicKeys = ['gameMusic3'];
   }
 
+  update(time: number, delta: number) {
+    super.update(time, delta);
+
+    if (this.kraken && this.player) {
+      const playerSprite = this.player.getSprite();
+      this.kraken.update(delta, playerSprite.x, playerSprite.y);
+    }
+  }
+
   createLevel() {
     this.physics.world.gravity.y = 50;
     this.physics.world.setBounds(0, 0, this.levelWidth, this.scale.height);
-
+    this.levelManager.setNeedPlankton(false);
     this.levelManager.createLevel({
       backgroundFar: this.levelBackgroundFar,
       background: this.levelBackground,
@@ -33,12 +44,41 @@ export default class Level1Scene extends GameScene {
     this.gameManager.setPlayer(this.player);
     this.startGame();
     this.gameManager.setupCollisions(this.player);
+
+    this.spawnKraken();
   }
 
   updateUI() {
     this.scoreText.setText('Mollusks: ' + this.gameManager.getScore() + '/' + this.molluskCount);
     this.hearts.forEach((heart, index) => {
       heart.setVisible(index < this.player.getHealth());
+    });
+  }
+
+  private spawnKraken() {
+    this.kraken = new EnemyKraken(this, this.cameras.main.width - 2000, this.scale.height / 2);
+
+    this.physics.add.overlap(
+      this.kraken.getMouthCollider(),
+      this.player.getSprite(),
+      () => {
+        if (this.player.isAlive()) {
+          this.player.takeDamage(100);
+          this.sound.add('eat', { volume: 0.5 }).play();
+        }
+      }
+    );
+
+    this.time.delayedCall(1000, () => {
+      this.cameras.main.shake(1000, 0.01);
+
+      this.time.delayedCall(500, () => {
+        this.kraken.setIsHunting(true);
+
+        setInterval(() => {
+          this.cameras.main.shake(350, 0.003);
+        }, 2000);
+      });
     });
   }
 
@@ -50,11 +90,5 @@ export default class Level1Scene extends GameScene {
       .setOrigin(0.5)
       .refreshBody()
       .setVisible(false);
-
-    // this.ground.create(400, this.scale.height - 120, undefined)
-    //   .setDisplaySize(100, 200)
-    //   .setOrigin(0.5)
-    //   .refreshBody()
-    //   .setVisible(false);
   }
 }

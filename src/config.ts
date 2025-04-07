@@ -5,7 +5,7 @@ export const config = {
   player: {
     maxHealth: 3,
     speed: 260,
-    lightRadius: 350,
+    lightRadius: 450,
   },
   enemy: {
     anglerFish: {
@@ -19,19 +19,19 @@ export const config = {
   },
   levels: {
     1: {
-      enemyCount: 6,
-      molluskCount: 1,
-      width: 2000,
+      enemyCount: 8,
+      molluskCount: 7,
+      width: 5000,
     },
     2: {
-      enemyCount: 10,
-      molluskCount: 10,
-      width: 10000,
-    },
-    3: {
       enemyCount: 15,
       molluskCount: 15,
-      width: 15000,
+      width: 8000,
+    },
+    3: {
+      enemyCount: 0,
+      molluskCount: 15,
+      width: 12000,
     }
   }
 }
@@ -54,7 +54,7 @@ export const phaserConfig: Phaser.Types.Core.GameConfig = {
     },
   },
   fps: {
-    target: 60,
+    target: 30,
     forceSetTimeOut: true
   },
   render: {
