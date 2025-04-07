@@ -19,8 +19,8 @@ export const config = {
   },
   levels: {
     1: {
-      enemyCount: 5,
-      molluskCount: 1,
+      enemyCount: 6,
+      molluskCount: 5,
       width: 5000,
     }
   }
@@ -32,9 +32,25 @@ export const phaserConfig: Phaser.Types.Core.GameConfig = {
   height: 600,
   backgroundColor: '#0a1119',
   parent: 'game',
+  autoFocus: true,
   physics: {
     default: 'arcade',
-    arcade: { debug: false }
+    arcade: {
+      fps: 60,
+      timeScale: 1,
+      fixedStep: true,
+      useTree: true,
+      debug: false,
+    },
+  },
+  fps: {
+    target: 60,
+    forceSetTimeOut: true
+  },
+  render: {
+    roundPixels: false,
+    pixelArt: false,
+    antialias: true,
   },
   scene: [],
   plugins: {
@@ -42,6 +58,7 @@ export const phaserConfig: Phaser.Types.Core.GameConfig = {
       { key: 'rexUI', plugin: UIPlugin, mapping: 'rexUI' }
     ]
   },
+  input: { mouse: true, touch: true, keyboard: true },
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH

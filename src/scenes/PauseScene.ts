@@ -40,7 +40,7 @@ export default class PauseScene extends BaseScene {
 
     this.gui.createButton(this.centerX, btn1.y + btn1.height + 15, 'Exit to Menu', () => {
       this.scene.stop(this.targetScene);
-      this.scene.start('StartScene');
+      this.fadeToScene('StartScene');
     });
   }
 

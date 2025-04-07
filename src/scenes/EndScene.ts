@@ -4,17 +4,20 @@ import { creditsText } from '../credits';
 export default class EndScene extends BaseScene {
   private music!: Phaser.Sound.BaseSound;
   private container!: Phaser.GameObjects.Container;
-  private scrollSpeed = 50;
+  private scrollSpeed = 140;
+  private isEnd: boolean;
 
   constructor() {
     super('EndScene');
   }
 
-  create() {
-    this.music = this.sound.add('menuMusic', { loop: true, volume: 0.3 });
-    this.music.play();
+  init(data: { music: Phaser.Sound.BaseSound }) {
+    this.music = data.music;
+  }
 
-    this.createUI()
+  create() {
+    this.isEnd = false;
+    this.createUI();
 
     this.scale.on('resize', this.resize, this);
 
@@ -24,12 +27,6 @@ export default class EndScene extends BaseScene {
     this.input.keyboard.on('keydown-ESC', () => {
       this.nextScene()
     })
-
-    this.events.on('shutdown', () => {
-      if (this.music && this.music.isPlaying) {
-        this.music.stop();
-      }
-    });
   }
 
   update(time: number, delta: number) {
@@ -39,10 +36,6 @@ export default class EndScene extends BaseScene {
     if (this.container.getBounds().bottom < 0) {
       this.nextScene()
     }
-  }
-
-  nextScene() {
-    this.scene.start('StartScene');
   }
 
   resize() {
@@ -62,5 +55,12 @@ export default class EndScene extends BaseScene {
 
     this.container = this.add.container(this.centerX, this.centerY, [credits]);
     this.container.setDepth(1);
+  }
+
+  nextScene() {
+    if (this.isEnd) return;
+    this.isEnd = true;
+    this.music.stop();
+    this.fadeToScene('StartScene');
   }
 }

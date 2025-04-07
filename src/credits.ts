@@ -2,19 +2,17 @@ export const creditsText = `
 Creator:
 j-tap
 
+Engine:
+PhaserJS
+
 Art:
 j-tap & DALL-E & Gimp
 
 Musics:
-Brylie Christopher Oxley - Everyting Tastes Different
-Brylie Christopher Oxley - Bustling Sunrise
-Brylie Christopher Oxley - Mossy Reclamation
+Brylie Christopher Oxley
 
 Sounds:
 freesound.org & Audacity
 
-Engine:
-PhaserJS
-
-Thanks Ludum Dare 57
+Thanks Ludum Dare 57 and You!
 `;

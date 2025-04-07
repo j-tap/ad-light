@@ -54,6 +54,7 @@ export class GameManager {
     this.molluskCount = config.molluskCount
     this.score = 0;
     this.state = GameState.Playing;
+    this.player.setInvulnerable(false);
 
     this.spawnEnemies(config.enemyCount);
     this.spawnMollusks(config.molluskCount);
@@ -76,19 +77,12 @@ export class GameManager {
 
   winGame() {
     this.state = GameState.Win;
-    console.log('You Win!');
-    // this.scene.time.delayedCall(1000, () => {
-    //   this.scene.scene.start('NextLevelScene');
-    // });
-    this.scene.scene.start('WinScene');
+    this.player.setInvulnerable(true);
+    this.scene.events.emit('player-win');
   }
 
   loseGame() {
     this.state = GameState.Lose;
-
-    this.scene.time.delayedCall(2500, () => {
-      this.scene.scene.start('GameOverScene');
-    });
   }
 
   addScore(amount: number) {

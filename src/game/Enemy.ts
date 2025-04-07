@@ -61,7 +61,7 @@ export class Enemy {
       this.sprite.y + this.lightOffsetY,
       this.lightRadius,
       0xf0ff5e,
-      10,
+      1,
     );
   }
 

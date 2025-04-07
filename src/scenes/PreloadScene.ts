@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
+import BaseScene from './BaseScene';
 
-export default class PreloadScene extends Phaser.Scene {
+export default class PreloadScene extends BaseScene {
   private progressBar!: Phaser.GameObjects.Image;
   private progressBox!: Phaser.GameObjects.Image;
   private loadingText!: Phaser.GameObjects.Text;
@@ -29,7 +30,7 @@ export default class PreloadScene extends Phaser.Scene {
 
       this.load.once('complete', () => {
         this.time.delayedCall(500, () => {
-          this.scene.start('StartScene');
+          this.fadeToScene('StartScene');
         });
       });
 
@@ -37,10 +38,6 @@ export default class PreloadScene extends Phaser.Scene {
     });
 
     this.load.start();
-  }
-
-  create() {
-    //
   }
 
   loadAssets() {
@@ -59,17 +56,17 @@ export default class PreloadScene extends Phaser.Scene {
     this.load.image('deadBg', 'assets/images/bg/dead-bg.png');
     this.load.image('winBg', 'assets/images/bg/win-bg.png');
     this.load.image('btn', 'assets/images/btn.png');
-    this.load.image('backgroundNear', 'assets/images/bg/backgroundNear.png');
     this.load.image('mollusk', 'assets/images/mollusk.png');
     this.load.image('fishBone', 'assets/images/fish-bone.png');
-    this.load.image('bubbleParticle', 'assets/images/bubble-particle.png');
     this.load.image('planktonParticle', 'assets/images/plankton-particle.png');
 
     this.load.image('level1Bg', 'assets/images/bg/level-1-bg.png');
+    this.load.image('level1Fg', 'assets/images/bg/level-1-fg.png');
 
     this.load.audio('menuMusic', 'assets/audio/music/menu.mp3');
-    this.load.audio('gameMusic1', 'assets/audio/music/game1.mp3');
-    this.load.audio('gameMusic2', 'assets/audio/music/game2.mp3');
+    this.load.audio('gameMusic1', 'assets/audio/music/game2.mp3');
+    this.load.audio('gameMusic2', 'assets/audio/music/game1.mp3');
+    this.load.audio('victory', 'assets/audio/music/victory.mp3');
     this.load.audio('depth', 'assets/audio/depth.mp3');
     this.load.audio('eat', 'assets/audio/eat.mp3');
     this.load.audio('drip', 'assets/audio/drip.mp3');
@@ -86,14 +83,16 @@ export default class PreloadScene extends Phaser.Scene {
       .setDisplaySize(0, 30);
 
     this.loadingText = this.add.text(this.centerX, this.centerY - 50, 'Loading...', {
-      fontSize: '20px',
-      color: '#ffffff'
-    }).setOrigin(0.5);
+        fontSize: '20px',
+        color: '#ffffff'
+      })
+      .setOrigin(0.5);
 
     this.percentText = this.add.text(this.centerX, this.centerY + 50, '0%', {
-      fontSize: '18px',
-      color: '#ffffff'
-    }).setOrigin(0.5);
+        fontSize: '18px',
+        color: '#ffffff'
+      })
+      .setOrigin(0.5);
   }
 
   handleLoadingEvents() {

@@ -5,8 +5,9 @@ import BaseScene from './BaseScene'
 
 export default class WinScene extends BaseScene {
   private gui!: GUI;
-  private bg!: Phaser.GameObjects.Image;
+  private bg: Phaser.GameObjects.Image;
   private bubbleEmitter: BubbleEmitter;
+  private music: Phaser.Sound.BaseSound;
 
   constructor() {
     super('WinScene');
@@ -15,11 +16,15 @@ export default class WinScene extends BaseScene {
   create() {
     this.gui = new GUI(this);
 
+    this.music = this.sound.add('victory', { volume: 0.4 })
+    this.music.play();
+
     this.createBg();
     this.createUI();
+    this.fadeIn();
 
-    this.time.delayedCall(3000, () => {
-      this.scene.start('EndScene');
+    this.time.delayedCall(3600, () => {
+      this.fadeToScene('EndScene', { music: this.music });
     })
   }
 

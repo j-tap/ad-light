@@ -3,8 +3,8 @@ import { Player } from '../../game/Player';
 import { config } from '../../config';
 
 export default class Level1Scene extends GameScene {
-  protected readonly cameraBackgroundColor = '#000000';
   protected readonly levelBackground: string = 'level1Bg';
+  protected readonly levelForeground: string = 'level1Fg';
   readonly nextScene = 'Level2Scene';
 
   constructor() {
@@ -12,6 +12,7 @@ export default class Level1Scene extends GameScene {
     this.levelWidth = config.levels[1].width
     this.enemyCount = config.levels[1].enemyCount
     this.molluskCount = config.levels[1].molluskCount
+    this.musicKeys = ['gameMusic1'];
   }
 
   createLevel() {
@@ -20,7 +21,7 @@ export default class Level1Scene extends GameScene {
 
     this.levelManager.createLevel({
       backgroundFar: this.levelBackground,
-      backgroundNear: 'backgroundNear',
+      backgroundNear: this.levelForeground,
     });
 
     this.player = new Player(this);
@@ -29,13 +30,6 @@ export default class Level1Scene extends GameScene {
     this.gameManager.setPlayer(this.player);
     this.startGame();
     this.gameManager.setupCollisions(this.player);
-  }
-
-  createCamera() {
-    this.cameras.main.setBounds(0, 0, this.levelWidth, this.scale.height);
-    this.cameras.main.startFollow(this.player.getSprite(), true, 0.08, 0.08);
-    this.cameras.main.setDeadzone(0, 100);
-    this.cameras.main.setBackgroundColor(this.cameraBackgroundColor);
   }
 
   updateUI() {

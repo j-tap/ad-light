@@ -9,10 +9,11 @@ export default class GameScene extends BaseScene {
   protected levelManager!: LevelManager;
   protected scoreText!: Phaser.GameObjects.Text;
   protected hearts: Phaser.GameObjects.Text[] = [];
-  protected musicKeys = ['gameMusic1', 'gameMusic2'];
+  protected musicKeys = [];
   protected currentTrackIndex = 0;
   protected currentMusic!: Phaser.Sound.BaseSound;
   protected nextScene: string
+  protected readonly cameraBackgroundColor = '#000000';
   protected levelWidth: number = 0;
   protected enemyCount: number = 0;
   protected molluskCount: number = 0;
@@ -31,6 +32,7 @@ export default class GameScene extends BaseScene {
     this.setupEvents();
     this.createLevel();
     this.setupPlayerUI();
+    this.fadeIn();
   }
 
   createLevel() {}
@@ -77,7 +79,7 @@ export default class GameScene extends BaseScene {
     }
 
     const musicKey = this.musicKeys[this.currentTrackIndex];
-    this.currentMusic = this.sound.add(musicKey, { volume: 0.25 });
+    this.currentMusic = this.sound.add(musicKey, { volume: 0.5 });
     this.currentMusic.play();
 
     this.currentMusic.once('complete', () => {
@@ -119,6 +121,19 @@ export default class GameScene extends BaseScene {
     this.events.on('player-died', () => {
       this.currentMusic.stop();
       this.gameManager.loseGame();
+
+      this.time.delayedCall(2500, () => {
+        this.fadeToScene('GameOverScene');
+      });
+    });
+
+    this.events.on('player-win', () => {
+      // this.scene.time.delayedCall(1000, () => {
+      //   this.toScene('NextLevelScene');
+      // });
+      this.time.delayedCall(500, () => {
+        this.fadeToScene('WinScene');
+      });
     });
   }
 
@@ -130,6 +145,15 @@ export default class GameScene extends BaseScene {
     }).setScrollFactor(0);
 
     this.createHearts();
+  }
+
+  createCamera() {
+    this.cameras.main.setBounds(0, 0, this.levelWidth, this.scale.height);
+    this.cameras.main.startFollow(this.player.getSprite(), true, 0.09, 0.09, 0, 0);
+    this.cameras.main.setLerp(0.1, 0.1);
+    this.cameras.main.setRoundPixels(false);
+    this.cameras.main.setDeadzone(0, 150);
+    this.cameras.main.setBackgroundColor(this.cameraBackgroundColor);
   }
 
   createHearts() {
@@ -146,6 +170,7 @@ export default class GameScene extends BaseScene {
       })
         .setAlpha(0.6)
         .setScrollFactor(0);
+
       this.hearts.push(heart);
     }
   }

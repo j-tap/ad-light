@@ -21,6 +21,7 @@ export default class GameOverScene extends BaseScene {
 
     this.createBg();
     this.createUI();
+    this.fadeIn();
 
     this.events.on('shutdown', () => {
       if (this.music && this.music.isPlaying) {
@@ -43,10 +44,10 @@ export default class GameOverScene extends BaseScene {
       .setScrollFactor(0);
 
     const btn1 = this.gui.createButton(this.centerX, text.y + text.height + 60, 'Again', () => {
-      this.scene.start('Level1Scene');
+      this.fadeToScene('Level1Scene');
     });
     this.gui.createButton(this.centerX, btn1.y + btn1.height + 15, 'Exit to Menu', () => {
-      this.scene.start('StartScene');
+      this.fadeToScene('StartScene');
     });
 
     this.tweens.add({

@@ -15,13 +15,14 @@ export default class StartScene extends BaseScene {
 
   create() {
     this.gui = new GUI(this);
-    this.menuMusic = this.sound.add('menuMusic', { loop: true, volume: .25 })
+    this.menuMusic = this.sound.add('menuMusic', { loop: true, volume: .5 })
     this.menuMusic.play();
 
     this.scale.on('resize', this.resize, this);
 
     this.createBg();
     this.createUI();
+    this.fadeIn();
 
     this.events.on('shutdown', () => {
       if (this.menuMusic && this.menuMusic.isPlaying) {
@@ -56,6 +57,6 @@ export default class StartScene extends BaseScene {
   }
 
   playGame() {
-    this.scene.start('Level1Scene');
+    this.fadeToScene('Level1Scene');
   }
 }

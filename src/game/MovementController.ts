@@ -1,25 +1,26 @@
 import Phaser from 'phaser';
 
 export class MovementController {
-  private keys: { [key: string]: Phaser.Input.Keyboard.Key };
+  private readonly sprite: Phaser.Physics.Arcade.Sprite;
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
-  private sprite: Phaser.Physics.Arcade.Sprite;
-
   private touchVector = new Phaser.Math.Vector2(0, 0);
+  private isMovingEvent = false;
+  private keys: Record<string, Phaser.Input.Keyboard.Key>;
 
   constructor(sprite: Phaser.Physics.Arcade.Sprite, cursors: Phaser.Types.Input.Keyboard.CursorKeys) {
     this.sprite = sprite;
     this.cursors = cursors;
 
+    const input = sprite.scene.input.keyboard;
     this.keys = {
       left: cursors.left,
       right: cursors.right,
       up: cursors.up,
       down: cursors.down,
-      moveLeft: sprite.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      moveRight: sprite.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-      moveUp: sprite.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      moveDown: sprite.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      moveLeft: input.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+      moveRight: input.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+      moveUp: input.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+      moveDown: input.addKey(Phaser.Input.Keyboard.KeyCodes.S),
     };
 
     this.createTouchControls();
@@ -28,31 +29,44 @@ export class MovementController {
   update(speed: number) {
     if (!this.cursors) return;
 
-    this.handleHorizontalMovement(speed);
-    this.handleVerticalMovement(speed);
+    this.handleInputEvents();
+    this.handleMovement(speed);
   }
 
-  isMoving(threshold: number): boolean {
-    if (!this.sprite.body) return false;
-    return Math.abs(this.sprite.body.velocity.x) > threshold || Math.abs(this.sprite.body.velocity.y) > threshold;
+  isMoving(threshold = 1): boolean {
+    return this.sprite.body
+      ? Math.abs(this.sprite.body.velocity.x) > threshold || Math.abs(this.sprite.body.velocity.y) > threshold
+      : false;
   }
 
   isInputActive(): boolean {
+    const k = this.keys;
     return (
       this.touchVector.length() > 0 ||
-      this.keys.moveLeft.isDown ||
-      this.keys.moveRight.isDown ||
-      this.keys.moveUp.isDown ||
-      this.keys.moveDown.isDown ||
-      this.cursors.left.isDown ||
-      this.cursors.right.isDown ||
-      this.cursors.up.isDown ||
-      this.cursors.down.isDown
+      k.left.isDown || k.right.isDown || k.up.isDown || k.down.isDown ||
+      k.moveLeft.isDown || k.moveRight.isDown || k.moveUp.isDown || k.moveDown.isDown
     );
   }
 
-  private handleHorizontalMovement(speed: number) {
-    const { left, right, moveLeft, moveRight } = this.keys;
+  disable() {
+    this.cursors = undefined as any;
+    this.keys = {} as any;
+    this.touchVector.set(0, 0);
+  }
+
+  private handleInputEvents() {
+    const active = this.isInputActive();
+
+    if (active && !this.isMovingEvent) {
+      this.isMovingEvent = true;
+      this.sprite.scene.events.emit('player-move-start', this.getDirection());
+    } else if (!active && this.isMovingEvent) {
+      this.isMovingEvent = false;
+    }
+  }
+
+  private handleMovement(speed: number) {
+    const { left, right, up, down, moveLeft, moveRight, moveUp, moveDown } = this.keys;
 
     if (left.isDown || moveLeft.isDown || this.touchVector.x < -0.2) {
       this.sprite.setVelocityX(-speed);
@@ -61,10 +75,6 @@ export class MovementController {
       this.sprite.setVelocityX(speed);
       this.sprite.setFlipX(false);
     }
-  }
-
-  private handleVerticalMovement(speed: number) {
-    const { up, down, moveUp, moveDown } = this.keys;
 
     if (up.isDown || moveUp.isDown || this.touchVector.y < -0.2) {
       this.sprite.setVelocityY(-speed);
@@ -76,32 +86,28 @@ export class MovementController {
   private createTouchControls() {
     const scene = this.sprite.scene;
 
-    scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      this.updateTouchDirection(pointer);
-    });
-
+    scene.input.on('pointerdown', this.updateTouchDirection, this);
     scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.isDown) {
-        this.updateTouchDirection(pointer);
-      }
+      if (pointer.isDown) this.updateTouchDirection(pointer);
     });
-
-    scene.input.on('pointerup', () => {
-      this.touchVector.set(0, 0);
-    });
+    scene.input.on('pointerup', () => this.touchVector.set(0, 0));
   }
 
   private updateTouchDirection(pointer: Phaser.Input.Pointer) {
-    const sprite = this.sprite;
     this.touchVector.set(
-      pointer.worldX - sprite.x,
-      pointer.worldY - sprite.y
+      pointer.worldX - this.sprite.x,
+      pointer.worldY - this.sprite.y
     ).normalize();
   }
 
-  disable() {
-    this.cursors = undefined as any;
-    this.keys = {} as any;
-    this.touchVector.set(0, 0);
+  private getDirection(): 'left' | 'right' | 'up' | 'down' | null {
+    const { left, right, up, down, moveLeft, moveRight, moveUp, moveDown } = this.keys;
+
+    if (left.isDown || moveLeft.isDown || this.touchVector.x < -0.2) return 'left';
+    if (right.isDown || moveRight.isDown || this.touchVector.x > 0.2) return 'right';
+    if (up.isDown || moveUp.isDown || this.touchVector.y < -0.2) return 'up';
+    if (down.isDown || moveDown.isDown || this.touchVector.y > 0.2) return 'down';
+
+    return null;
   }
 }

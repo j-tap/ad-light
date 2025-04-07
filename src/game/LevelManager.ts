@@ -34,27 +34,29 @@ export class LevelManager {
   }
 
   private createBackgroundLayer(texture: string) {
-    const bg = this.scene.add.tileSprite(
+    const textureImage = this.scene.textures.get(texture).getSourceImage();
+    const textureWidth = textureImage.width;
+    const textureHeight = textureImage.height;
+    const scaleX = this.scene.scale.width / textureWidth;
+    const scaleY = this.scene.scale.height / textureHeight;
+    const scale = Math.max(scaleX, scaleY);
+
+    return this.scene.add.tileSprite(
       0,
       this.scene.scale.height,
-      this.scene.scale.width,
-      0,
-      texture,
+      textureWidth,
+      textureHeight,
+      texture
     )
       .setOrigin(0, 1)
       .setScrollFactor(0)
-      .setPipeline('Light2D');
-
-    const textureHeight = this.scene.textures.get(texture).getSourceImage().height;
-    const scaleY = this.scene.scale.height / textureHeight;
-    bg.setScale(1, scaleY);
-
-    return bg;
+      .setPipeline('Light2D')
+      .setScale(scale);
   }
 
   private createBackground(far: string, near: string) {
     this.backgroundFar = this.createBackgroundLayer(far);
-    this.backgroundFar.postFX.addBlur()
+    this.backgroundFar.postFX.addBlur(1)
 
     this.backgroundNear = this.createBackgroundLayer(near);
   }
