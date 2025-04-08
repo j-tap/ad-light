@@ -24,7 +24,7 @@ export const config = {
       width: 5000,
     },
     2: {
-      enemyCount: 15,
+      enemyCount: 12,
       molluskCount: 15,
       width: 8000,
     },

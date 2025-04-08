@@ -51,6 +51,7 @@ export default class PreloadScene extends BaseScene {
       frameHeight: 128,
     });
 
+    this.load.image('logo', 'assets/images/logo-title.png');
     this.load.image('menuBg', 'assets/images/bg/menu-bg.png');
     this.load.image('deadBg', 'assets/images/bg/dead-bg.png');
     this.load.image('winBg', 'assets/images/bg/win-bg.png');

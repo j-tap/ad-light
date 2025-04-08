@@ -7,6 +7,7 @@ export default class StartScene extends BaseScene {
   private startButton!: Phaser.GameObjects.GameObject;
   private bg!: Phaser.GameObjects.Image;
   private bubbleEmitter: BubbleEmitter;
+  private logo: Phaser.GameObjects.Image;
   menuMusic!: Phaser.Sound.BaseSound;
 
   constructor() {
@@ -36,9 +37,12 @@ export default class StartScene extends BaseScene {
   }
 
   createUI() {
-    this.gui.createButton(this.centerX, this.centerY, 'Start', () => {
+    this.gui.createButton(this.centerX, this.centerY / 2, 'Start', () => {
       this.playGame();
     });
+
+    this.logo = this.add.image(0, 0, 'logo');
+    this.logo.setPosition(this.centerX, this.scale.height - this.logo.displayHeight / 2 - 30);
   }
 
   createBg() {
