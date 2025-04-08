@@ -46,7 +46,7 @@ export const phaserConfig: Phaser.Types.Core.GameConfig = {
   physics: {
     default: 'arcade',
     arcade: {
-      fps: 60,
+      fps: 30,
       timeScale: 1,
       fixedStep: true,
       useTree: true,

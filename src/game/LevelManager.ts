@@ -28,7 +28,7 @@ export class LevelManager {
 
   update() {
     this.backgroundFar.tilePositionX = this.scene.cameras.main.scrollX * 0.2;
-    this.foreground.tilePositionX = this.scene.cameras.main.scrollX * 4;
+    this.foreground.tilePositionX = this.scene.cameras.main.scrollX * 3;
 
     if (this.planktonEmitter) {
       this.planktonEmitter.setPosition(
@@ -44,7 +44,7 @@ export class LevelManager {
 
   private createBackground(far: string, bg: string, fg: string) {
     this.backgroundFar = this.createBackgroundLayer(far);
-    this.backgroundFar.postFX.addBlur(.8)
+    this.backgroundFar.postFX.addBlur(1)
 
     this.background = this.createBackgroundLayer(bg, true);
     this.foreground = this.createBackgroundLayer(fg, false, true);

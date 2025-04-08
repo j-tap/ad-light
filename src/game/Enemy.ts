@@ -6,6 +6,7 @@ enum EnemyState {
   Chase,
 }
 
+// TODO: Make as base class
 export class Enemy {
   private scene: Phaser.Scene;
   private readonly distanceVisible: number = config.enemy.anglerFish.distanceVision;
@@ -62,7 +63,7 @@ export class Enemy {
       this.sprite.y + this.lightOffsetY,
       this.lightRadius,
       0xf0ff5e,
-      40,
+      4,
     );
   }
 
