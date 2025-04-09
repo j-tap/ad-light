@@ -2,6 +2,7 @@ import BaseScene from './BaseScene';
 import { Player } from '../game/Player';
 import { LevelManager } from '../game/LevelManager';
 import { GameManager } from '../game/GameManager';
+import {LevelConfig} from '../config'
 
 export default class GameScene extends BaseScene {
   protected readonly cameraBackgroundColor = '#000000';
@@ -13,11 +14,9 @@ export default class GameScene extends BaseScene {
   protected currentMusic!: Phaser.Sound.BaseSound;
   protected hearts: Phaser.GameObjects.Text[] = [];
   protected musicKeys = [];
+  protected levelConfig: LevelConfig;
   protected currentTrackIndex = 0;
   protected ambientColor: number = 0x1a2a6c;
-  protected levelWidth: number = 0;
-  protected enemyCount: number = 0;
-  protected molluskCount: number = 0;
   public nextScene: string
 
   constructor(key: string) {
@@ -159,15 +158,6 @@ export default class GameScene extends BaseScene {
     this.createHearts();
   }
 
-  createCamera() {
-    this.cameras.main.setBounds(0, 0, this.levelWidth, this.scale.height);
-    this.cameras.main.startFollow(this.player.getSprite(), true, 0.09, 0.09, 0, 0);
-    this.cameras.main.setLerp(0.1, 0.1);
-    this.cameras.main.setRoundPixels(false);
-    this.cameras.main.setDeadzone(0, 150);
-    this.cameras.main.setBackgroundColor(this.cameraBackgroundColor);
-  }
-
   createHearts() {
     this.hearts.forEach(heart => heart.destroy());
     this.hearts = [];
@@ -187,11 +177,17 @@ export default class GameScene extends BaseScene {
     }
   }
 
+  createCamera() {
+    this.cameras.main.setBounds(0, 0, this.levelConfig.width, this.scale.height);
+    this.cameras.main.startFollow(this.player.getSprite(), true, 0.09, 0.09, 0, 0);
+    this.cameras.main.setLerp(0.1, 0.1);
+    this.cameras.main.setRoundPixels(false);
+    this.cameras.main.setDeadzone(0, 150);
+    this.cameras.main.setBackgroundColor(this.cameraBackgroundColor);
+  }
+
   startGame() {
-    this.gameManager.startGame({
-      enemyCount: this.enemyCount,
-      molluskCount: this.molluskCount,
-    });
+    this.gameManager.startGame(this.levelConfig);
   }
 
   private createLighting() {

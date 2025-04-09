@@ -4,7 +4,7 @@ export class EnemyKraken {
   private readonly mouthCollider: Phaser.GameObjects.Rectangle;
   private readonly mouthOffsetX = 200;
   private readonly mouthOffsetY = 150;
-  private speed = 0.016;
+  private speed = 0.017;
   private isHunting: boolean;
   private wobbleTime = 0;
   private wobbleSpeed = 0.005;

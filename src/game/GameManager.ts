@@ -2,11 +2,7 @@ import Phaser from 'phaser';
 import { Enemy } from './Enemy';
 import { Mollusk } from './Mollusk';
 import { Player } from './Player';
-
-interface StartGameConfig {
-  enemyCount: number,
-  molluskCount: number,
-}
+import type { MolluskConfig, EnemiesConfig, LevelConfig } from '../config'
 
 export enum GameState {
   Start,
@@ -51,14 +47,14 @@ export class GameManager {
     });
   }
 
-  startGame(config: StartGameConfig) {
-    this.molluskCount = config.molluskCount
+  startGame(config: LevelConfig) {
+    this.molluskCount = config.mollusks.count;
     this.score = 0;
     this.state = GameState.Playing;
     this.player.setInvulnerable(false);
 
-    this.spawnEnemies(config.enemyCount);
-    this.spawnMollusks(config.molluskCount);
+    this.spawnEnemies(config.enemies);
+    this.spawnMollusks(config.mollusks);
   }
 
   pauseGame() {
@@ -156,14 +152,14 @@ export class GameManager {
     player.takeDamage(1);
   }
 
-  private spawnEnemies(enemyCount: number) {
+  private spawnEnemies(enemies: EnemiesConfig) {
     const { width, height } = this.scene.physics.world.bounds;
     const playerSprite = this.player.getSprite();
     const playerX = playerSprite.x;
     const playerY = playerSprite.y;
     const minDistance = 300;
 
-    for (let i = 0; i < enemyCount; i++) {
+    for (let i = 0; i < enemies.count; i++) {
       let x: number, y: number, tries = 0;
 
       do {
@@ -178,12 +174,25 @@ export class GameManager {
     }
   }
 
-  private spawnMollusks(molluskCount: number) {
+  private spawnMollusks(mollusks: MolluskConfig) {
     const bounds = this.scene.physics.world.bounds;
+    const indents = {
+      top: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      ...mollusks.indent,
+    }
 
-    for (let i = 0; i < molluskCount; i++) {
-      const x = Phaser.Math.Between(bounds.left + 100, bounds.right - 100);
-      const y = Phaser.Math.Between(bounds.top + 100, bounds.height - 50);
+    for (let i = 0; i < mollusks.count; i++) {
+      const x = Phaser.Math.Between(
+        bounds.left + 100 + indents.left,
+        bounds.right - 100 - indents.right,
+      );
+      const y = Phaser.Math.Between(
+        bounds.top + 100 + indents.top,
+        bounds.height - 50 - indents.bottom,
+      );
 
       const mollusk = new Mollusk(this.scene, x, y);
       this.mollusks.push(mollusk);

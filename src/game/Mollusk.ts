@@ -6,6 +6,8 @@ export class Mollusk {
   private readonly lightRadius: number = config.mollusk.lightRadius;
   private readonly sprite: Phaser.GameObjects.Sprite;
   private readonly light: Phaser.GameObjects.Light;
+  private readonly rotationAngle: number = 7;
+  private readonly floatDistance: number = 5;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
@@ -17,10 +19,21 @@ export class Mollusk {
 
     scene.tweens.add({
       targets: this.sprite,
-      rotation: { from: Phaser.Math.DegToRad(-5), to: Phaser.Math.DegToRad(5) },
+      rotation: { from: Phaser.Math.DegToRad(-this.rotationAngle), to: Phaser.Math.DegToRad(this.rotationAngle) },
       yoyo: true,
       repeat: -1,
-      duration: 3000,
+      duration: Phaser.Math.Between(1200, 1600),
+      delay: Phaser.Math.Between(0, 800),
+      ease: 'Sine.easeInOut'
+    });
+
+    scene.tweens.add({
+      targets: this.sprite,
+      y: { from: y - this.floatDistance, to: y + this.floatDistance },
+      yoyo: true,
+      repeat: -1,
+      duration: Phaser.Math.Between(1800, 2500),
+      delay: Phaser.Math.Between(0, 1000),
       ease: 'Sine.easeInOut'
     });
   }

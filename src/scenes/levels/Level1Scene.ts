@@ -9,16 +9,14 @@ export default class Level1Scene extends GameScene {
 
   constructor() {
     super('Level1Scene');
-    this.levelWidth = config.levels[1].width
-    this.enemyCount = config.levels[1].enemyCount
-    this.molluskCount = config.levels[1].molluskCount
+    this.levelConfig = config.levels[1]
     this.nextScene = 'Level2Scene';
     this.musicKeys = ['gameMusic1'];
   }
 
   createLevel() {
     this.physics.world.gravity.y = 50;
-    this.physics.world.setBounds(0, 0, this.levelWidth, this.scale.height);
+    this.physics.world.setBounds(0, 0, this.levelConfig.width, this.scale.height);
 
     this.levelManager.createLevel({
       backgroundFar: this.levelBackgroundFar,
@@ -36,7 +34,7 @@ export default class Level1Scene extends GameScene {
   }
 
   updateUI() {
-    this.scoreText.setText('Mollusks: ' + this.gameManager.getScore() + '/' + this.molluskCount);
+    this.scoreText.setText('Mollusks: ' + this.gameManager.getScore() + '/' + this.levelConfig.mollusks.count);
     this.hearts.forEach((heart, index) => {
       heart.setVisible(index < this.player.getHealth());
     });
@@ -45,8 +43,8 @@ export default class Level1Scene extends GameScene {
   private createColliders() {
     this.ground = this.physics.add.staticGroup();
 
-    this.ground.create(this.levelWidth / 2, this.scale.height - 35, undefined)
-      .setDisplaySize(this.levelWidth, 45)
+    this.ground.create(this.levelConfig.width / 2, this.scale.height - 35, undefined)
+      .setDisplaySize(this.levelConfig.width, 45)
       .setOrigin(0.5)
       .refreshBody()
       .setVisible(false);

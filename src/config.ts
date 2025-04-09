@@ -1,6 +1,49 @@
 import Phaser from 'phaser';
 import UIPlugin from 'phaser3-rex-plugins/templates/ui/ui-plugin.js';
 
+export interface EnemiesConfig {
+  count: number,
+}
+
+export interface MolluskConfig {
+  count: number,
+  indent?: {
+    top?: number,
+    bottom?: number,
+    left?: number,
+    right?: number,
+  },
+}
+
+export interface LevelConfig {
+  width: number,
+  enemies: EnemiesConfig,
+  mollusks: MolluskConfig,
+}
+
+export interface GameConfig {
+  player: {
+    maxHealth: number,
+    speed: number,
+    lightRadius: number,
+  },
+  enemy: {
+    anglerFish: {
+      speed: number,
+      lightRadius: number,
+      distanceVision: number,
+    }
+  },
+  mollusk: {
+    lightRadius: number,
+  },
+  levels: {
+    [key: number]: LevelConfig,
+  }
+}
+
+export const VERSION = __APP_VERSION__;
+
 export const config = {
   player: {
     maxHealth: 3,
@@ -15,23 +58,38 @@ export const config = {
     }
   },
   mollusk: {
-    lightRadius: 60,
+    lightRadius: 100,
   },
   levels: {
     1: {
-      enemyCount: 8,
-      molluskCount: 7,
       width: 5000,
+      enemies: {
+        count: 8,
+      },
+      mollusks: {
+        count: 7,
+      },
     },
     2: {
-      enemyCount: 12,
-      molluskCount: 15,
       width: 8000,
+      enemies: {
+        count: 12,
+      },
+      mollusks: {
+        count: 15,
+      },
     },
     3: {
-      enemyCount: 0,
-      molluskCount: 15,
       width: 12000,
+      enemies: {
+        count: 0,
+      },
+      mollusks: {
+        count: 18,
+        indent: {
+          left: 800,
+        },
+      }
     }
   }
 }

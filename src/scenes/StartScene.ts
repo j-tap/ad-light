@@ -1,6 +1,7 @@
 import BaseScene from './BaseScene';
 import { BubbleEmitter } from '../game/BubbleEmitter'
 import { GUI } from '../ui/Gui';
+import { VERSION } from '../config'
 
 export default class StartScene extends BaseScene {
   private gui!: GUI;
@@ -43,6 +44,13 @@ export default class StartScene extends BaseScene {
 
     this.logo = this.add.image(0, 0, 'logo');
     this.logo.setPosition(this.centerX, this.scale.height - this.logo.displayHeight / 2 - 30);
+
+    this.add.text(this.scale.width - 15, this.scale.height - 15, `v${VERSION}`, {
+        fontSize: 14,
+        color: '#dcdcdc',
+        fontFamily: 'Arial',
+      })
+      .setOrigin(1, 1);
   }
 
   createBg() {
