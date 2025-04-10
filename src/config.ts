@@ -87,6 +87,8 @@ export const config = {
       mollusks: {
         count: 18,
         indent: {
+          top: 230,
+          bottom: 230,
           left: 800,
         },
       }

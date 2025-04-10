@@ -54,7 +54,7 @@ export default class Level1Scene extends GameScene {
   }
 
   private spawnKraken() {
-    this.kraken = new EnemyKraken(this, this.cameras.main.width - 2000, this.scale.height / 2);
+    this.kraken = new EnemyKraken(this, -2000, this.scale.height / 2);
 
     this.physics.add.overlap(
       this.kraken.getMouthCollider(),
