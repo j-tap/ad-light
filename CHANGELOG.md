@@ -1,5 +1,8 @@
 # Changelog
 
+## [0.1.3] - 2025-04-10
+- Updated Readme
+
 ## [0.1.3] - 2025-04-09
 - Fixed Kraken spawn position
 - Replaced wrong background on level 3
