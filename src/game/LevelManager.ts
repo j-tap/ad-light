@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
-import type { LevelTextures } from '../config';
+import type { CurrentZone, LevelTextures } from '../config';
 
 interface LevelCreateConfig {
   textures: LevelTextures,
   plankton: boolean,
+  vertical?: boolean,
+  currentZones?: CurrentZone[],
 }
 
 interface LevelLayer {
@@ -20,6 +22,7 @@ const FOREGROUND_DEPTH = 10;
 export class LevelManager {
   private readonly scene: Phaser.Scene;
   private readonly layers: LevelLayer[] = [];
+  private vertical = false;
   private planktonEmitter?: Phaser.GameObjects.Particles.ParticleEmitter;
   private planktonZone?: Phaser.Geom.Rectangle;
 
@@ -27,7 +30,9 @@ export class LevelManager {
     this.scene = scene;
   }
 
-  createLevel({ textures, plankton }: LevelCreateConfig) {
+  createLevel({ textures, plankton, vertical = false, currentZones = [] }: LevelCreateConfig) {
+    this.vertical = vertical;
+
     this.createLayer(textures.backgroundFar, 0.2, true).sprite.postFX.addBlur(1);
     this.createLayer(textures.background, 1, false);
     this.createLayer(textures.foreground, 3, true).sprite.setDepth(FOREGROUND_DEPTH);
@@ -35,13 +40,19 @@ export class LevelManager {
     if (plankton) {
       this.createPlanktonEmitter();
     }
+
+    currentZones.forEach(zone => this.createCurrentEmitter(zone));
   }
 
   update() {
     const { scrollX, scrollY } = this.scene.cameras.main;
 
     this.layers.forEach(layer => {
-      layer.sprite.tilePositionX = scrollX * layer.parallax;
+      if (this.vertical) {
+        layer.sprite.tilePositionY = scrollY * layer.parallax;
+      } else {
+        layer.sprite.tilePositionX = scrollX * layer.parallax;
+      }
     });
 
     this.planktonEmitter?.setPosition(scrollX, scrollY);
@@ -78,7 +89,11 @@ export class LevelManager {
   private layoutLayer({ sprite, cover, textureHeight }: LevelLayer) {
     const { width, height } = this.scene.scale;
 
-    if (cover) {
+    sprite.setScale(1);
+
+    if (this.vertical) {
+      sprite.setSize(width, height);
+    } else if (cover) {
       sprite.setScale(Math.max(width / sprite.width, height / sprite.height));
     } else {
       sprite.setSize(width, textureHeight);
@@ -106,5 +121,26 @@ export class LevelManager {
     });
 
     this.planktonEmitter.setPipeline('Light2D');
+  }
+
+  /** Currents live in world space so they stay put as the camera dives. */
+  private createCurrentEmitter(zone: CurrentZone) {
+    const width = this.scene.physics.world.bounds.width;
+    const speed = Math.sign(zone.forceX) * Math.max(Math.abs(zone.forceX) * 0.45, 24);
+
+    const emitter = this.scene.add.particles(0, zone.y, 'planktonParticle', {
+      emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(0, 0, width, zone.height) },
+      lifespan: 3200,
+      speedX: { min: speed * 0.6, max: speed * 1.4 },
+      speedY: { min: -12, max: 12 },
+      scale: { start: 0.35, end: 0 },
+      alpha: { start: 0.55, end: 0 },
+      quantity: 2,
+      frequency: 180,
+      gravityY: 0,
+      blendMode: Phaser.BlendModes.ADD,
+    });
+
+    emitter.setPipeline('Light2D');
   }
 }

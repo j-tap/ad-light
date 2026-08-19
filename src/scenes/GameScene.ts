@@ -6,7 +6,7 @@ import { GameManager } from '../game/GameManager';
 import { CameraDirector } from '../game/systems/CameraDirector';
 import { TutorialDirector } from '../game/systems/TutorialDirector';
 import { Hud } from '../ui/Hud';
-import { config, LevelConfig } from '../config';
+import { config, isVerticalLevel, levelWorldSize, LevelConfig } from '../config';
 
 const DEATH_DELAY = 2500;
 const WIN_DELAY = 500;
@@ -26,6 +26,7 @@ export default class GameScene extends BaseScene {
   private groundBody?: Phaser.Physics.Arcade.Sprite;
   private currentMusic?: Phaser.Sound.BaseSound;
   private currentTrackIndex = 0;
+  private lastDepthProgress = -1;
 
   constructor(key: string, levelConfig: LevelConfig) {
     super(key);
@@ -63,21 +64,29 @@ export default class GameScene extends BaseScene {
     if (!this.gameManager.isPlaying()) return;
 
     this.player.update(time, delta);
+    this.applyCurrent(delta);
+    this.updateDepthPressure();
     this.cameraDirector.update(delta, this.gameManager.getThreat());
     this.tutorial?.update(delta);
     this.updateUI();
   }
 
   protected createLevel() {
-    const { width, textures, plankton } = this.levelConfig;
+    const { textures, plankton, currentZones } = this.levelConfig;
+    const { width, height } = this.worldSize();
 
     this.physics.world.gravity.y = config.world.gravityY;
-    this.physics.world.setBounds(0, 0, width, this.scale.height);
+    this.physics.world.setBounds(0, 0, width, height);
 
-    this.levelManager.createLevel({ textures, plankton: plankton !== false });
+    this.levelManager.createLevel({
+      textures,
+      plankton: plankton !== false,
+      vertical: this.isVertical(),
+      currentZones,
+    });
     this.createGround();
 
-    this.player = new Player(this, this.gameManager.getNoiseField());
+    this.player = new Player(this, this.gameManager.getNoiseField(), this.playerSpawn());
     this.createCamera();
     this.cameraDirector = new CameraDirector(this);
 
@@ -86,14 +95,33 @@ export default class GameScene extends BaseScene {
     this.gameManager.setupCollisions(this.player);
   }
 
+  private worldSize() {
+    return levelWorldSize(this.levelConfig, this.scale.height);
+  }
+
+  private isVertical() {
+    return isVerticalLevel(this.levelConfig);
+  }
+
+  private playerSpawn() {
+    const { width, height } = this.worldSize();
+
+    if (this.isVertical()) {
+      return { x: width / 2, y: Math.min(this.scale.height * 0.4, 280) };
+    }
+
+    return { x: this.scale.width / 2, y: height / 2 };
+  }
+
   private createCamera() {
     const camera = this.cameras.main;
+    const { width, height } = this.worldSize();
 
-    camera.setBounds(0, 0, this.levelConfig.width, this.scale.height);
+    camera.setBounds(0, 0, width, height);
     camera.startFollow(this.player.getSprite(), true, 0.09, 0.09, 0, 0);
     camera.setLerp(0.1, 0.1);
     camera.setRoundPixels(false);
-    camera.setDeadzone(0, 150);
+    camera.setDeadzone(this.isVertical() ? 150 : 0, this.isVertical() ? 0 : 150);
     camera.setBackgroundColor(this.cameraBackgroundColor);
   }
 
@@ -129,11 +157,12 @@ export default class GameScene extends BaseScene {
 
   private layoutGround() {
     const { groundHeight, groundOffsetY } = config.world;
+    const { width, height } = this.worldSize();
 
     this.groundBody
       ?.setOrigin(0.5)
-      .setPosition(this.levelConfig.width / 2, this.scale.height - groundOffsetY)
-      .setDisplaySize(this.levelConfig.width, groundHeight)
+      .setPosition(width / 2, height - groundOffsetY)
+      .setDisplaySize(width, groundHeight)
       .refreshBody();
   }
 
@@ -207,14 +236,55 @@ export default class GameScene extends BaseScene {
   private handleResize() {
     if (!this.groundBody) return;
 
-    this.physics.world.setBounds(0, 0, this.levelConfig.width, this.scale.height);
-    this.cameras.main.setBounds(0, 0, this.levelConfig.width, this.scale.height);
+    const { width, height } = this.worldSize();
+
+    this.physics.world.setBounds(0, 0, width, height);
+    this.cameras.main.setBounds(0, 0, width, height);
 
     this.layoutGround();
     this.levelManager.resize();
     this.hud.layout();
     this.cameraDirector.layout();
     this.uiCamera.setSize(this.scale.width, this.scale.height);
+  }
+
+  private applyCurrent(delta: number) {
+    const zones = this.levelConfig.currentZones;
+
+    if (!zones?.length) return;
+
+    const sprite = this.player.getSprite();
+    const zone = zones.find(entry => sprite.y >= entry.y && sprite.y < entry.y + entry.height);
+
+    if (!zone) return;
+
+    const body = sprite.body as Phaser.Physics.Arcade.Body;
+    body.velocity.x += zone.forceX * (delta / 1000) * 30;
+  }
+
+  /** Ambient light and fuel drain follow how far down the player has gone. */
+  private updateDepthPressure() {
+    const effects = this.levelConfig.depthEffects;
+
+    if (!effects) return;
+
+    const progress = Phaser.Math.Clamp(this.player.getSprite().y / this.worldSize().height, 0, 1);
+
+    if (Math.abs(progress - this.lastDepthProgress) < config.world.depthUpdateStep) return;
+
+    this.lastDepthProgress = progress;
+    this.lights.setAmbientColor(this.lerpColor(effects.ambientFrom, effects.ambientTo, progress));
+    this.player.setLightDrainMultiplier(
+      Phaser.Math.Linear(effects.lightDrainFrom, effects.lightDrainTo, progress)
+    );
+  }
+
+  private lerpColor(from: number, to: number, t: number) {
+    const a = Phaser.Display.Color.IntegerToColor(from);
+    const b = Phaser.Display.Color.IntegerToColor(to);
+    const mixed = Phaser.Display.Color.Interpolate.ColorWithColor(a, b, 100, t * 100);
+
+    return Phaser.Display.Color.GetColor(mixed.r, mixed.g, mixed.b);
   }
 
   private updateUI() {

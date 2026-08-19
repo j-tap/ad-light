@@ -26,8 +26,25 @@ export interface LevelTextures {
   foreground: string,
 }
 
+export type LevelOrientation = 'horizontal' | 'vertical';
+
+export interface DepthEffects {
+  ambientFrom: number,
+  ambientTo: number,
+  lightDrainFrom: number,
+  lightDrainTo: number,
+}
+
+export interface CurrentZone {
+  y: number,
+  height: number,
+  forceX: number,
+}
+
 export interface LevelConfig {
   width: number,
+  height?: number,
+  orientation?: LevelOrientation,
   nextScene: string,
   music: string[],
   textures: LevelTextures,
@@ -36,15 +53,29 @@ export interface LevelConfig {
   plankton?: boolean,
   /** Turns the level opening into a scripted teaching zone. */
   tutorial?: boolean,
+  depthEffects?: DepthEffects,
+  currentZones?: CurrentZone[],
 }
 
 export const VERSION = __APP_VERSION__;
+
+export function isVerticalLevel(level: LevelConfig) {
+  return level.orientation === 'vertical';
+}
+
+export function levelWorldSize(level: LevelConfig, viewportHeight: number) {
+  return {
+    width: level.width,
+    height: isVerticalLevel(level) ? (level.height ?? viewportHeight) : viewportHeight,
+  };
+}
 
 export const config = {
   world: {
     gravityY: 50,
     groundHeight: 45,
     groundOffsetY: 35,
+    depthUpdateStep: 0.02,
   },
   noise: {
     radiusMin: 180,

@@ -36,11 +36,11 @@ export class Player {
   private lightDrainMultiplier = 1;
   private health: number;
 
-  constructor(scene: Phaser.Scene, noiseField: NoiseField) {
+  constructor(scene: Phaser.Scene, noiseField: NoiseField, spawn?: { x: number, y: number }) {
     this.scene = scene;
     this.noiseField = noiseField;
     this.health = this.healthMax;
-    this.sprite = this.createSprite();
+    this.sprite = this.createSprite(spawn?.x ?? scene.scale.width / 2, spawn?.y ?? scene.scale.height / 2);
     this.light = this.createLight();
     this.bubbleEmitter = new BubbleEmitter(this.scene, this.sprite);
     this.movementController = new MovementController(this.sprite);
@@ -178,12 +178,8 @@ export class Player {
     return Phaser.Math.Clamp((speed - movingThreshold) / (this.speed - movingThreshold), 0, 1);
   }
 
-  private createSprite() {
-    const sprite = this.scene.physics.add.sprite(
-      this.scene.scale.width / 2,
-      this.scene.scale.height / 2,
-      'player'
-    )
+  private createSprite(x: number, y: number) {
+    const sprite = this.scene.physics.add.sprite(x, y, 'player')
       .setCollideWorldBounds(true)
       .setDamping(true)
       .setDrag(0.25)
