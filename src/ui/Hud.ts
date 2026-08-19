@@ -5,14 +5,24 @@ const DEPTH = 100;
 const MARGIN = 20;
 const HEART_SPACING = 40;
 const HEART_ROW_Y = 70;
+const LIGHT_BAR_Y = 118;
+const LIGHT_BAR_WIDTH = 160;
+const LIGHT_BAR_HEIGHT = 12;
+const LIGHT_BAR_STEP = 0.01;
+const LIGHT_COLOR_FULL = 0xcff1ff;
+const LIGHT_COLOR_LOW = 0xff6a4a;
 
 export class Hud {
   private readonly scene: Phaser.Scene;
   private readonly molluskText: Phaser.GameObjects.Text;
   private readonly hearts: Phaser.GameObjects.Text[] = [];
+  private readonly lightFrame: Phaser.GameObjects.Rectangle;
+  private readonly lightFill: Phaser.GameObjects.Rectangle;
+  private lightBlinkTween?: Phaser.Tweens.Tween;
   private lastCollected = -1;
   private lastTotal = -1;
   private lastHealth = -1;
+  private lastLightRatio = -1;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -27,8 +37,35 @@ export class Hud {
       this.hearts.push(this.scene.add.text(0, 0, '❤️', { fontSize: '32px' }).setAlpha(0.6));
     }
 
-    this.elements().forEach(element => element.setScrollFactor(0).setDepth(DEPTH));
+    this.lightFrame = this.scene.add
+      .rectangle(0, 0, LIGHT_BAR_WIDTH, LIGHT_BAR_HEIGHT)
+      .setOrigin(0, 0.5)
+      .setStrokeStyle(2, 0x6d8a99);
+
+    this.lightFill = this.scene.add
+      .rectangle(0, 0, LIGHT_BAR_WIDTH, LIGHT_BAR_HEIGHT, LIGHT_COLOR_FULL)
+      .setOrigin(0, 0.5);
+
+    this.elements().forEach(element => {
+      element.setScrollFactor(0);
+      element.setDepth(DEPTH);
+    });
+
     this.layout();
+  }
+
+  setLight(ratio: number) {
+    if (Math.abs(ratio - this.lastLightRatio) < LIGHT_BAR_STEP) return;
+
+    const wasLow = this.isLowRatio(this.lastLightRatio);
+
+    this.lastLightRatio = ratio;
+    this.lightFill.setScale(Math.max(ratio, 0), 1);
+    this.lightFill.setFillStyle(this.lightColor(ratio));
+
+    if (this.isLowRatio(ratio) !== wasLow) {
+      this.toggleLightBlink(this.isLowRatio(ratio));
+    }
   }
 
   setMollusks(collected: number, total: number) {
@@ -51,9 +88,44 @@ export class Hud {
     this.hearts.forEach((heart, index) => {
       heart.setPosition(MARGIN + index * HEART_SPACING, HEART_ROW_Y);
     });
+    this.lightFrame.setPosition(MARGIN, LIGHT_BAR_Y);
+    this.lightFill.setPosition(MARGIN, LIGHT_BAR_Y);
   }
 
-  private elements(): Phaser.GameObjects.Text[] {
-    return [this.molluskText, ...this.hearts];
+  private isLowRatio(ratio: number) {
+    return ratio >= 0 && ratio <= config.player.light.lowFuelThreshold;
+  }
+
+  private lightColor(ratio: number) {
+    const color = Phaser.Display.Color.Interpolate.ColorWithColor(
+      Phaser.Display.Color.ValueToColor(LIGHT_COLOR_LOW),
+      Phaser.Display.Color.ValueToColor(LIGHT_COLOR_FULL),
+      100,
+      ratio * 100
+    );
+
+    return Phaser.Display.Color.GetColor(color.r, color.g, color.b);
+  }
+
+  private toggleLightBlink(active: boolean) {
+    if (!active) {
+      this.lightBlinkTween?.stop();
+      this.lightBlinkTween = undefined;
+      this.lightFill.setAlpha(1);
+      return;
+    }
+
+    this.lightBlinkTween = this.scene.tweens.add({
+      targets: this.lightFill,
+      alpha: { from: 1, to: 0.3 },
+      duration: 400,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  private elements(): Array<Phaser.GameObjects.Text | Phaser.GameObjects.Rectangle> {
+    return [this.molluskText, ...this.hearts, this.lightFrame, this.lightFill];
   }
 }

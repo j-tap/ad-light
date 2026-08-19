@@ -178,5 +178,6 @@ export default class GameScene extends BaseScene {
   private updateUI() {
     this.hud.setMollusks(this.gameManager.getScore(), this.levelConfig.mollusks.count);
     this.hud.setHealth(this.player.getHealth());
+    this.hud.setLight(this.player.getLightRatio());
   }
 }

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { MovementController } from './MovementController';
 import { BubbleEmitter } from './BubbleEmitter';
+import { LightFuel } from './systems/LightFuel';
 import { ensureTexture } from './textures';
 import { config } from '../config';
 
@@ -8,9 +9,10 @@ const WAVE_TEXTURE = 'waveTexture';
 const BONE_TEXTURE = 'bones';
 const REFERENCE_FRAME_MS = 1000 / 30;
 
+const lightSettings = config.player.light;
+
 export class Player {
   private readonly healthMax: number = config.player.maxHealth;
-  private readonly lightRadius: number = config.player.lightRadius;
   private readonly speed: number = config.player.speed;
   private readonly idleRotationDeg: number = 2;
   private readonly idleDuration: number = 1800;
@@ -18,14 +20,18 @@ export class Player {
   private readonly scene: Phaser.Scene;
   private readonly sprite: Phaser.Physics.Arcade.Sprite;
   private readonly light: Phaser.GameObjects.Light;
+  private readonly lightFuel = new LightFuel();
   private readonly movementController: MovementController;
   private readonly bubbleEmitter: BubbleEmitter;
+  private readonly dimKey?: Phaser.Input.Keyboard.Key;
   private idleTween?: Phaser.Tweens.Tween;
   private wasMovingLastFrame = false;
   private isInvulnerable = false;
   private alive = true;
   private moveWaveTimer = 0;
+  private darknessTimer = 0;
   private pulseTime = 0;
+  private lightDrainMultiplier = 1;
   private health: number;
 
   constructor(scene: Phaser.Scene) {
@@ -35,6 +41,7 @@ export class Player {
     this.light = this.createLight();
     this.bubbleEmitter = new BubbleEmitter(this.scene, this.sprite);
     this.movementController = new MovementController(this.sprite);
+    this.dimKey = scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
 
     this.createTextures();
   }
@@ -61,11 +68,34 @@ export class Player {
 
     this.wasMovingLastFrame = isInputActive;
 
+    this.lightFuel.update(delta, this.isDimming(), this.lightDrainMultiplier);
     this.updateLight(delta);
+    this.updateDarknessPressure(delta);
   }
 
   getSprite() {
     return this.sprite;
+  }
+
+  getLightRatio() {
+    return this.lightFuel.getRatio();
+  }
+
+  getLightRadius() {
+    return this.lightFuel.getRadius();
+  }
+
+  isDimming() {
+    return this.dimKey?.isDown === true;
+  }
+
+  refillLight(amount: number) {
+    this.lightFuel.refill(amount);
+    this.darknessTimer = 0;
+  }
+
+  setLightDrainMultiplier(multiplier: number) {
+    this.lightDrainMultiplier = multiplier;
   }
 
   getHealth() {
@@ -152,7 +182,7 @@ export class Player {
     return this.scene.lights.addLight(
       this.sprite.x,
       this.sprite.y,
-      this.lightRadius,
+      this.lightFuel.getRadius(),
       0xcff1ff,
       1
     );
@@ -198,8 +228,28 @@ export class Player {
   private updateLight(delta: number) {
     this.light.x = this.sprite.x;
     this.light.y = this.sprite.y;
-    this.pulseTime += 0.02 * (delta / REFERENCE_FRAME_MS);
-    this.light.intensity = 2.5 + Math.sin(this.pulseTime) * 0.5;
+    this.pulseTime += this.lightFuel.getPulseSpeed() * (delta / REFERENCE_FRAME_MS);
+    this.light.radius = this.lightFuel.getRadius();
+    this.light.intensity = this.lightFuel.getIntensity(this.pulseTime);
+  }
+
+  /** Total darkness is survivable but slowly crushes the player, so it stays a threat. */
+  private updateDarknessPressure(delta: number) {
+    if (!this.lightFuel.isEmpty()) {
+      this.darknessTimer = 0;
+      return;
+    }
+
+    if (this.darknessTimer === 0) {
+      this.scene.sound.play('depth', { volume: 0.4 });
+    }
+
+    this.darknessTimer += delta;
+
+    if (this.darknessTimer >= lightSettings.darknessGraceMs) {
+      this.darknessTimer = 0;
+      this.takeDamage(1);
+    }
   }
 
   private becomeInvulnerable() {

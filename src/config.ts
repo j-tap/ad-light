@@ -47,7 +47,25 @@ export const config = {
   player: {
     maxHealth: 3,
     speed: 260,
-    lightRadius: 450,
+    light: {
+      fuelMax: 100,
+      fuelStart: 85,
+      drainPerSecond: 1.4,
+      fuelPerMollusk: 25,
+      radiusMax: 500,
+      radiusMin: 120,
+      intensityMax: 2.5,
+      intensityMin: 1.2,
+      pulseAmplitude: 0.5,
+      pulseAmplitudeLow: 1,
+      pulseSpeed: 0.02,
+      pulseSpeedLow: 0.05,
+      dimRadius: 90,
+      dimDrainMultiplier: 0.25,
+      dimTransitionMs: 350,
+      lowFuelThreshold: 0.25,
+      darknessGraceMs: 15000,
+    },
   },
   enemy: {
     anglerFish: {

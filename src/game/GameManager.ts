@@ -3,6 +3,7 @@ import { BaseEnemy } from './enemies/BaseEnemy';
 import { AnglerFish } from './enemies/AnglerFish';
 import { Mollusk } from './Mollusk';
 import { Player } from './Player';
+import { config } from '../config';
 import type { MolluskConfig, EnemyKind, EnemySpawnConfig, SpawnIndent, LevelConfig } from '../config';
 
 export enum GameState {
@@ -54,12 +55,12 @@ export class GameManager {
     this.player = player;
   }
 
-  startGame(config: LevelConfig) {
+  startGame(level: LevelConfig) {
     this.score = 0;
     this.player.setInvulnerable(false);
 
-    this.spawnEnemies(config.enemies);
-    this.spawnMollusks(config.mollusks);
+    this.spawnEnemies(level.enemies);
+    this.spawnMollusks(level.mollusks);
 
     this.state = GameState.Playing;
   }
@@ -246,6 +247,7 @@ export class GameManager {
     mollusk.destroy();
 
     this.scene.sound.play('drip', { volume: 0.2 });
+    this.player.refillLight(config.player.light.fuelPerMollusk);
     this.addScore(1);
   }
 }

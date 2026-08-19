@@ -25,4 +25,8 @@ phaserConfig.scene = [
   ...levelScenes,
 ];
 
-new Phaser.Game(phaserConfig);
+const game = new Phaser.Game(phaserConfig);
+
+if (import.meta.env.DEV) {
+  (window as unknown as { game: Phaser.Game }).game = game;
+}
