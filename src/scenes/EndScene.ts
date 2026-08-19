@@ -1,50 +1,42 @@
+import Phaser from 'phaser';
 import BaseScene from './BaseScene';
 import { creditsText } from '../credits';
 
 export default class EndScene extends BaseScene {
-  private music!: Phaser.Sound.BaseSound;
+  private readonly scrollSpeed = 140;
   private container!: Phaser.GameObjects.Container;
-  private scrollSpeed = 140;
-  private isEnd: boolean;
+  private music?: Phaser.Sound.BaseSound;
 
   constructor() {
     super('EndScene');
   }
 
-  init(data: { music: Phaser.Sound.BaseSound }) {
+  init(data: { music?: Phaser.Sound.BaseSound }) {
     this.music = data.music;
   }
 
   create() {
-    this.isEnd = false;
+    super.create();
+
     this.createUI();
 
-    this.scale.on('resize', this.resize, this);
-
-    this.input.once('pointerdown', () => {
-      this.nextScene()
+    this.onResize(() => {
+      this.container.x = this.centerX;
     });
-    this.input.keyboard.on('keydown-ESC', () => {
-      this.nextScene()
-    })
+
+    this.input.once(Phaser.Input.Events.POINTER_DOWN, () => this.nextScene());
+    this.input.keyboard?.on('keydown-ESC', () => this.nextScene());
   }
 
   update(time: number, delta: number) {
-    const dy = (this.scrollSpeed * delta) / 1000;
-    this.container.y -= dy;
+    this.container.y -= (this.scrollSpeed * delta) / 1000;
 
     if (this.container.getBounds().bottom < 0) {
-      this.nextScene()
+      this.nextScene();
     }
   }
 
-  resize() {
-    if (this.container) {
-      this.container.x = this.centerX;
-    }
-  }
-
-  createUI() {
+  private createUI() {
     const credits = this.add.text(0, 100, creditsText, {
       fontSize: '18px',
       fontFamily: 'Arial',
@@ -53,14 +45,13 @@ export default class EndScene extends BaseScene {
     })
       .setOrigin(0.5, 0);
 
-    this.container = this.add.container(this.centerX, this.centerY, [credits]);
-    this.container.setDepth(1);
+    this.container = this.add.container(this.centerX, this.centerY, [credits]).setDepth(1);
   }
 
-  nextScene() {
-    if (this.isEnd) return;
-    this.isEnd = true;
-    this.music.stop();
-    this.fadeToScene('StartScene');
+  private nextScene() {
+    this.fadeToScene('StartScene', {}, () => {
+      this.music?.destroy();
+      this.music = undefined;
+    });
   }
 }

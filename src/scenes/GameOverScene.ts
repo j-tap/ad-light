@@ -1,14 +1,16 @@
 import Phaser from 'phaser';
+import Label from 'phaser3-rex-plugins/templates/ui/label/Label';
+import BaseScene from './BaseScene';
 import { GUI } from '../ui/Gui';
-import { BubbleEmitter } from '../game/BubbleEmitter'
-import BaseScene from './BaseScene'
+import { BubbleEmitter } from '../game/BubbleEmitter';
 
 export default class GameOverScene extends BaseScene {
   private gui!: GUI;
-  private bg!: Phaser.GameObjects.Image;
-  private bubbleEmitter: BubbleEmitter;
-  private music: Phaser.Sound.BaseSound;
-  private lastLevel: string;
+  private background!: Phaser.GameObjects.Image;
+  private title!: Phaser.GameObjects.Text;
+  private buttons: Label[] = [];
+  private music?: Phaser.Sound.BaseSound;
+  private lastLevel!: string;
 
   constructor() {
     super('GameOverScene');
@@ -19,28 +21,33 @@ export default class GameOverScene extends BaseScene {
   }
 
   create() {
+    super.create();
+
     this.gui = new GUI(this);
 
-    this.music = this.sound.add('depth', { volume: 0.4 })
+    this.music = this.sound.add('depth', { volume: 0.4 });
     this.music.play();
 
-    this.createBg();
+    this.createBackground();
     this.createUI();
-    this.fadeIn();
+    this.layout();
 
-    this.events.on('shutdown', () => {
-      if (this.music && this.music.isPlaying) {
-        this.music.stop();
-        }
+    this.onResize(() => this.layout());
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.music?.destroy();
+      this.music = undefined;
     });
   }
 
-  resize(gameSize: Phaser.Structs.Size) {
-    this.gui.resizeFullscreenBackground(this.bg)
+  private createBackground() {
+    this.background = this.gui.createFullscreenBackground('deadBg', 'bottom');
+
+    new BubbleEmitter(this, undefined, { minDelay: 1000, maxDelay: 1000 });
   }
 
-  createUI() {
-    const text = this.add.text(this.centerX, this.centerY / 2, 'You Died', {
+  private createUI() {
+    this.title = this.add.text(0, 0, 'You Died', {
       fontSize: '44px',
       color: '#dcdcdc',
       fontFamily: 'Arial'
@@ -48,25 +55,29 @@ export default class GameOverScene extends BaseScene {
       .setOrigin(0.5)
       .setScrollFactor(0);
 
-    const btn1 = this.gui.createButton(this.centerX, text.y + text.height + 60, 'Again', () => {
-      this.fadeToScene(this.lastLevel);
-    });
-    this.gui.createButton(this.centerX, btn1.y + btn1.height + 15, 'Exit to Menu', () => {
-      this.fadeToScene('StartScene');
-    });
+    this.buttons = [
+      this.gui.createButton(0, 0, 'Again', () => this.fadeToScene(this.lastLevel)),
+      this.gui.createButton(0, 0, 'Exit to Menu', () => this.fadeToScene('StartScene')),
+    ];
 
     this.tweens.add({
-      targets: text,
+      targets: this.title,
       alpha: { from: 0, to: 1 },
       duration: 500,
       ease: 'Sine.easeInOut'
     });
   }
 
-  createBg() {
-    this.bg = this.gui.createFullscreenBackground('deadBg', 'bottom');
+  private layout() {
+    this.gui.resizeFullscreenBackground(this.background);
 
-    this.bubbleEmitter = new BubbleEmitter(this);
-    this.bubbleEmitter.setTiming(1000, 1000);
+    this.title.setPosition(this.centerX, this.centerY / 2);
+
+    let y = this.title.y + this.title.height + 60;
+
+    this.buttons.forEach(button => {
+      button.setPosition(this.centerX, y).layout();
+      y += button.height + 15;
+    });
   }
 }

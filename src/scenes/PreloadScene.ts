@@ -1,19 +1,14 @@
 import Phaser from 'phaser';
 import BaseScene from './BaseScene';
 
+const PROGRESS_BAR_WIDTH = 300;
+const PROGRESS_BAR_HEIGHT = 30;
+
 export default class PreloadScene extends BaseScene {
   private progressBar!: Phaser.GameObjects.Image;
   private progressBox!: Phaser.GameObjects.Image;
   private loadingText!: Phaser.GameObjects.Text;
   private percentText!: Phaser.GameObjects.Text;
-
-  get centerX() {
-    return this.scale.width / 2;
-  }
-
-  get centerY() {
-    return this.scale.height / 2;
-  }
 
   constructor() {
     super('PreloadScene');
@@ -23,15 +18,14 @@ export default class PreloadScene extends BaseScene {
     this.load.image('loader', 'assets/images/loader.png');
     this.load.image('loaderLine', 'assets/images/loader-line.png');
 
-    this.load.once('complete', () => {
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
       this.createPreloader();
       this.loadAssets();
       this.handleLoadingEvents();
 
-      this.load.once('complete', () => {
-        this.time.delayedCall(500, () => {
-          this.fadeToScene('StartScene');
-        });
+      this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+        this.createAnimations();
+        this.time.delayedCall(500, () => this.fadeToScene('StartScene'));
       });
 
       this.load.start();
@@ -40,7 +34,7 @@ export default class PreloadScene extends BaseScene {
     this.load.start();
   }
 
-  loadAssets() {
+  private loadAssets() {
     this.load.spritesheet('player', 'assets/images/player-sprite.png', {
       frameWidth: 128,
       frameHeight: 128,
@@ -58,7 +52,6 @@ export default class PreloadScene extends BaseScene {
     this.load.image('btn', 'assets/images/btn.png');
     this.load.image('mollusk', 'assets/images/mollusk.png');
     this.load.image('fishBone', 'assets/images/fish-bone.png');
-    // this.load.image('swallowtail', 'assets/images/enemy-swallowtail.png');
     this.load.image('kraken', 'assets/images/enemy-kraken.png');
     this.load.image('planktonParticle', 'assets/images/plankton-particle.png');
 
@@ -75,9 +68,9 @@ export default class PreloadScene extends BaseScene {
     this.load.image('level3Fg', 'assets/images/bg/level-3-fg.png');
 
     this.load.audio('menuMusic', 'assets/audio/music/menu.mp3');
+    this.load.audio('gameMusic1', 'assets/audio/music/game3.mp3');
     this.load.audio('gameMusic2', 'assets/audio/music/game2.mp3');
     this.load.audio('gameMusic3', 'assets/audio/music/game1.mp3');
-    this.load.audio('gameMusic1', 'assets/audio/music/game3.mp3');
     this.load.audio('victory', 'assets/audio/music/victory.mp3');
     this.load.audio('depth', 'assets/audio/depth.mp3');
     this.load.audio('eat', 'assets/audio/eat.mp3');
@@ -85,40 +78,59 @@ export default class PreloadScene extends BaseScene {
     this.load.audio('fishBubble', 'assets/audio/fish-bubble.mp3');
   }
 
-  createPreloader() {
+  /** Animations belong to the global manager, so they are registered once for the whole game. */
+  private createAnimations() {
+    if (!this.anims.exists('swim')) {
+      this.anims.create({
+        key: 'swim',
+        frames: this.anims.generateFrameNumbers('player', { start: 0, end: 2 }),
+        frameRate: 8,
+        repeat: -1,
+      });
+    }
+
+    if (!this.anims.exists('enemy-swim')) {
+      this.anims.create({
+        key: 'enemy-swim',
+        frames: this.anims.generateFrameNumbers('enemy1', { start: 0, end: 2 }),
+        frameRate: 6,
+        repeat: -1,
+      });
+    }
+  }
+
+  private createPreloader() {
     this.progressBox = this.add.image(this.centerX, this.centerY, 'loader')
       .setOrigin(0.5)
       .setDisplaySize(320, 50);
 
     this.progressBar = this.add.image(this.centerX - 150, this.centerY, 'loaderLine')
       .setOrigin(0, 0.5)
-      .setDisplaySize(0, 30);
+      .setDisplaySize(0, PROGRESS_BAR_HEIGHT);
 
     this.loadingText = this.add.text(this.centerX, this.centerY - 50, 'Loading...', {
-        fontSize: '20px',
-        color: '#ffffff'
-      })
+      fontSize: '20px',
+      color: '#ffffff'
+    })
       .setOrigin(0.5);
 
     this.percentText = this.add.text(this.centerX, this.centerY + 50, '0%', {
-        fontSize: '18px',
-        color: '#ffffff'
-      })
+      fontSize: '18px',
+      color: '#ffffff'
+    })
       .setOrigin(0.5);
   }
 
-  handleLoadingEvents() {
-    this.load.on('progress', (value: number) => {
-      this.progressBar.setDisplaySize(300 * value, 30);
-      this.percentText.setText(Math.floor(value * 100) + '%');
+  private handleLoadingEvents() {
+    this.load.on(Phaser.Loader.Events.PROGRESS, (value: number) => {
+      this.progressBar.setDisplaySize(PROGRESS_BAR_WIDTH * value, PROGRESS_BAR_HEIGHT);
+      this.percentText.setText(`${Math.floor(value * 100)}%`);
     });
 
-    this.load.on('complete', () => {
-      this.destroyPreloader();
-    });
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => this.destroyPreloader());
   }
 
-  destroyPreloader() {
+  private destroyPreloader() {
     this.progressBar.destroy();
     this.progressBox.destroy();
     this.loadingText.destroy();

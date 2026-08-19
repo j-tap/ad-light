@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import UIPlugin from 'phaser3-rex-plugins/templates/ui/ui-plugin.js';
 
 export interface EnemiesConfig {
   count: number,
@@ -15,36 +14,30 @@ export interface MolluskConfig {
   },
 }
 
-export interface LevelConfig {
-  width: number,
-  enemies: EnemiesConfig,
-  mollusks: MolluskConfig,
+export interface LevelTextures {
+  backgroundFar: string,
+  background: string,
+  foreground: string,
 }
 
-export interface GameConfig {
-  player: {
-    maxHealth: number,
-    speed: number,
-    lightRadius: number,
-  },
-  enemy: {
-    anglerFish: {
-      speed: number,
-      lightRadius: number,
-      distanceVision: number,
-    }
-  },
-  mollusk: {
-    lightRadius: number,
-  },
-  levels: {
-    [key: number]: LevelConfig,
-  }
+export interface LevelConfig {
+  width: number,
+  nextScene: string,
+  music: string[],
+  textures: LevelTextures,
+  enemies: EnemiesConfig,
+  mollusks: MolluskConfig,
+  plankton?: boolean,
 }
 
 export const VERSION = __APP_VERSION__;
 
 export const config = {
+  world: {
+    gravityY: 50,
+    groundHeight: 45,
+    groundOffsetY: 35,
+  },
   player: {
     maxHealth: 3,
     speed: 260,
@@ -63,6 +56,13 @@ export const config = {
   levels: {
     1: {
       width: 5000,
+      nextScene: 'Level2Scene',
+      music: ['gameMusic1'],
+      textures: {
+        backgroundFar: 'level1BgFar',
+        background: 'level1Bg',
+        foreground: 'level1Fg',
+      },
       enemies: {
         count: 8,
       },
@@ -72,6 +72,13 @@ export const config = {
     },
     2: {
       width: 8000,
+      nextScene: 'Level3Scene',
+      music: ['gameMusic2'],
+      textures: {
+        backgroundFar: 'level2BgFar',
+        background: 'level2Bg',
+        foreground: 'level2Fg',
+      },
       enemies: {
         count: 12,
       },
@@ -81,6 +88,14 @@ export const config = {
     },
     3: {
       width: 12000,
+      nextScene: 'WinScene',
+      music: ['gameMusic3'],
+      plankton: false,
+      textures: {
+        backgroundFar: 'level3BgFar',
+        background: 'level3Bg',
+        foreground: 'level3Fg',
+      },
       enemies: {
         count: 0,
       },
@@ -93,7 +108,7 @@ export const config = {
         },
       }
     }
-  }
+  } as Record<number, LevelConfig>,
 }
 
 export const phaserConfig: Phaser.Types.Core.GameConfig = {
@@ -121,13 +136,9 @@ export const phaserConfig: Phaser.Types.Core.GameConfig = {
     roundPixels: false,
     pixelArt: false,
     antialias: true,
+    powerPreference: 'high-performance',
   },
   scene: [],
-  plugins: {
-    scene: [
-      { key: 'rexUI', plugin: UIPlugin, mapping: 'rexUI' }
-    ]
-  },
   input: { mouse: true, touch: true, keyboard: true },
   scale: {
     mode: Phaser.Scale.RESIZE,

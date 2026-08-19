@@ -1,74 +1,71 @@
+import Phaser from 'phaser';
+import Label from 'phaser3-rex-plugins/templates/ui/label/Label';
 import BaseScene from './BaseScene';
-import { BubbleEmitter } from '../game/BubbleEmitter'
+import { BubbleEmitter } from '../game/BubbleEmitter';
 import { GUI } from '../ui/Gui';
-import { VERSION } from '../config'
+import { VERSION } from '../config';
 
 export default class StartScene extends BaseScene {
   private gui!: GUI;
-  private startButton!: Phaser.GameObjects.GameObject;
-  private bg!: Phaser.GameObjects.Image;
-  private bubbleEmitter: BubbleEmitter;
-  private logo: Phaser.GameObjects.Image;
-  menuMusic!: Phaser.Sound.BaseSound;
+  private background!: Phaser.GameObjects.Image;
+  private startButton!: Label;
+  private logo!: Phaser.GameObjects.Image;
+  private versionText!: Phaser.GameObjects.Text;
+  private music?: Phaser.Sound.BaseSound;
 
   constructor() {
     super('StartScene');
   }
 
   create() {
+    super.create();
+
     this.gui = new GUI(this);
-    this.menuMusic = this.sound.add('menuMusic', { loop: true, volume: .5 })
-    this.menuMusic.play();
 
-    this.scale.on('resize', this.resize, this);
+    this.music = this.sound.add('menuMusic', { loop: true, volume: 0.5 });
+    this.music.play();
 
-    this.createBg();
+    this.createBackground();
     this.createUI();
-    this.fadeIn();
+    this.layout();
 
-    this.events.on('shutdown', () => {
-      if (this.menuMusic && this.menuMusic.isPlaying) {
-        this.menuMusic.stop();
-      }
+    this.onResize(() => this.layout());
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.music?.destroy();
+      this.music = undefined;
     });
 
-    this.input.keyboard.on('keydown-ENTER', () => {
-      this.playGame();
-    })
+    this.input.keyboard?.on('keydown-ENTER', () => this.playGame());
   }
 
-  createUI() {
-    this.gui.createButton(this.centerX, this.centerY / 2, 'Start', () => {
-      this.playGame();
-    });
+  private createBackground() {
+    this.background = this.gui.createFullscreenBackground('menuBg', 'bottom');
 
+    new BubbleEmitter(this, undefined, { minDelay: 1000, maxDelay: 1000 });
+  }
+
+  private createUI() {
+    this.startButton = this.gui.createButton(0, 0, 'Start', () => this.playGame());
     this.logo = this.add.image(0, 0, 'logo');
-    this.logo.setPosition(this.centerX, this.scale.height - this.logo.displayHeight / 2 - 30);
 
-    this.add.text(this.scale.width - 15, this.scale.height - 15, `v${VERSION}`, {
-        fontSize: 14,
-        color: '#dcdcdc',
-        fontFamily: 'Arial',
-      })
+    this.versionText = this.add.text(0, 0, `v${VERSION}`, {
+      fontSize: '14px',
+      color: '#dcdcdc',
+      fontFamily: 'Arial',
+    })
       .setOrigin(1, 1);
   }
 
-  createBg() {
-    this.bg = this.bg = this.gui.createFullscreenBackground('menuBg', 'bottom')
+  private layout() {
+    this.gui.resizeFullscreenBackground(this.background);
 
-    this.bubbleEmitter = new BubbleEmitter(this);
-    this.bubbleEmitter.setTiming(1000, 1000);
+    this.startButton.setPosition(this.centerX, this.centerY / 2).layout();
+    this.logo.setPosition(this.centerX, this.scale.height - this.logo.displayHeight / 2 - 30);
+    this.versionText.setPosition(this.scale.width - 15, this.scale.height - 15);
   }
 
-  resize() {
-    if (this.startButton) {
-      (this.startButton as Phaser.GameObjects.Container).setPosition(this.centerX, this.centerY);
-    }
-
-    this.gui.resizeFullscreenBackground(this.bg);
-  }
-
-  playGame() {
+  private playGame() {
     this.fadeToScene('Level1Scene');
   }
 }

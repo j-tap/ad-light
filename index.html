@@ -2,16 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="description" content="Ad Light - dive into the depths, collect glowing mollusks and survive. A game made for Ludum Dare 57." />
+  <meta name="theme-color" content="#0a1119" />
   <title>Ad Light</title>
   <style>
-    body {
+    html, body {
       margin: 0;
+      height: 100%;
       overflow: hidden;
+      background-color: #000;
+      overscroll-behavior: none;
     }
     #game {
       width: 100vw;
       height: 100vh;
-      background-color: #000;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #game canvas {
+      display: block;
     }
   </style>
 </head>

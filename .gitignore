@@ -32,8 +32,7 @@ Thumbs.db
 .env.local
 .env.*.local
 
-# Optional: если используешь coverage (например, vitest)
 coverage/
 
-# Optional: если используешь eslint
 eslintcache
+codealike.json

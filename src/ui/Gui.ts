@@ -1,90 +1,70 @@
-import Phaser from 'phaser'
+import Phaser from 'phaser';
+import Label from 'phaser3-rex-plugins/templates/ui/label/Label';
+
+export type BackgroundAlign = 'center' | 'top' | 'bottom';
+
+const ALIGN_KEY = 'bgAlign';
+const BUTTON_WIDTH = 220;
+const BUTTON_HEIGHT = 80;
 
 export class GUI {
-  private scene: Phaser.Scene;
+  private readonly scene: Phaser.Scene;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
   }
 
-  createButton(x: number, y: number, label: string, onClick: () => void) {
-    const btnWidth = 220;
-    const btnHeight = 80;
-
+  createButton(x: number, y: number, label: string, onClick: () => void): Label {
     const background = this.scene.add.image(0, 0, 'btn')
-      .setDisplaySize(btnWidth, btnHeight)
-      .setInteractive()
+      .setDisplaySize(BUTTON_WIDTH, BUTTON_HEIGHT)
       .setOrigin(0.5);
 
-    return (this.scene as any).rexUI.add.label({
+    const button = new Label(this.scene, {
       x,
       y,
-      width: btnWidth,
-      height: btnHeight,
+      width: BUTTON_WIDTH,
+      height: BUTTON_HEIGHT,
       align: 'center',
       background,
-      text: this.scene.add.text(0, 0, label, {fontSize: '24px', color: '#dcdcdc'}),
-      space: {left: 10, right: 10, top: 10, bottom: 10}
-    })
+      text: this.scene.add.text(0, 0, label, { fontSize: '24px', color: '#dcdcdc' }),
+      space: { left: 10, right: 10, top: 10, bottom: 10 },
+    });
+
+    this.scene.add.existing(button);
+
+    return button
       .layout()
-      .setInteractive({useHandCursor: true})
+      .setInteractive({ useHandCursor: true })
       .on('pointerdown', onClick)
-      .on('pointerover', () => {
-        background.setTint(0xcccccc);
-      })
-      .on('pointerout', () => {
-        background.clearTint();
-      });
+      .on('pointerover', () => background.setTint(0xcccccc))
+      .on('pointerout', () => background.clearTint()) as Label;
   }
 
-  createText() {
-    //
-  }
-
-  createFullscreenBackground(
-    textureKey: string, align: 'center' | 'top' | 'bottom' = 'center'
-  ) {
-    const bg = this.scene.add.image(this.scene.scale.width / 2, this.scene.scale.height / 2, textureKey)
+  createFullscreenBackground(textureKey: string, align: BackgroundAlign = 'center') {
+    const background = this.scene.add.image(0, 0, textureKey)
       .setOrigin(0.5)
       .setScrollFactor(0);
 
-    const scaleX = this.scene.scale.width / bg.width;
-    const scaleY = this.scene.scale.height / bg.height;
-    const scale = Math.max(scaleX, scaleY);
+    background.setData(ALIGN_KEY, align);
+    this.resizeFullscreenBackground(background);
 
-    bg.setScale(scale);
-
-    (bg as any).bgAlignType = align;
-
-    this.updateBackgroundPosition(bg);
-
-    return bg;
+    return background;
   }
 
-  resizeFullscreenBackground(bg: Phaser.GameObjects.Image) {
-    const width = this.scene.scale.width;
-    const height = this.scene.scale.height;
-    const scaleX = width / bg.width;
-    const scaleY = height / bg.height;
-    const scale = Math.max(scaleX, scaleY);
+  resizeFullscreenBackground(background: Phaser.GameObjects.Image) {
+    const { width, height } = this.scene.scale;
 
-    bg.setScale(scale);
+    background.setScale(Math.max(width / background.width, height / background.height));
 
-    this.updateBackgroundPosition(bg);
-  }
-
-  private updateBackgroundPosition(bg: Phaser.GameObjects.Image) {
-    const width = this.scene.scale.width;
-    const height = this.scene.scale.height;
-
-    const align = (bg as any).bgAlignType;
-
-    if (align === 'bottom') {
-      bg.setPosition(width / 2, height - (bg.height * bg.scaleY) / 2);
-    } else if (align === 'top') {
-      bg.setPosition(width / 2, (bg.height * bg.scaleY) / 2);
-    } else { // center
-      bg.setPosition(width / 2, height / 2);
+    switch (background.getData(ALIGN_KEY) as BackgroundAlign) {
+      case 'top':
+        background.setPosition(width / 2, background.displayHeight / 2);
+        break;
+      case 'bottom':
+        background.setPosition(width / 2, height - background.displayHeight / 2);
+        break;
+      default:
+        background.setPosition(width / 2, height / 2);
     }
   }
 }

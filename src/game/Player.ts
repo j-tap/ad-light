@@ -1,7 +1,12 @@
 import Phaser from 'phaser';
 import { MovementController } from './MovementController';
 import { BubbleEmitter } from './BubbleEmitter';
+import { ensureTexture } from './textures';
 import { config } from '../config';
+
+const WAVE_TEXTURE = 'waveTexture';
+const BONE_TEXTURE = 'bones';
+const REFERENCE_FRAME_MS = 1000 / 30;
 
 export class Player {
   private readonly healthMax: number = config.player.maxHealth;
@@ -10,29 +15,28 @@ export class Player {
   private readonly idleRotationDeg: number = 2;
   private readonly idleDuration: number = 1800;
   private readonly waveInterval: number = 300;
-  private readonly waveTexture = 'waveTexture';
   private readonly scene: Phaser.Scene;
-  private sprite: Phaser.Physics.Arcade.Sprite;
-  private light: Phaser.GameObjects.Light;
-  private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
+  private readonly sprite: Phaser.Physics.Arcade.Sprite;
+  private readonly light: Phaser.GameObjects.Light;
+  private readonly movementController: MovementController;
+  private readonly bubbleEmitter: BubbleEmitter;
   private idleTween?: Phaser.Tweens.Tween;
-  private movementController!: MovementController;
-  private bubbleEmitter!: BubbleEmitter;
-  private isWaveTextureCreated = false;
   private wasMovingLastFrame = false;
   private isInvulnerable = false;
   private alive = true;
   private moveWaveTimer = 0;
   private pulseTime = 0;
-  private health = 0;
+  private health: number;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.health = this.healthMax;
-    this.createSprite();
-    this.createInput();
+    this.sprite = this.createSprite();
+    this.light = this.createLight();
     this.bubbleEmitter = new BubbleEmitter(this.scene, this.sprite);
-    this.movementController = new MovementController(this.sprite, this.cursors);
+    this.movementController = new MovementController(this.sprite);
+
+    this.createTextures();
   }
 
   update(time: number, delta: number) {
@@ -57,7 +61,7 @@ export class Player {
 
     this.wasMovingLastFrame = isInputActive;
 
-    this.updateLight();
+    this.updateLight(delta);
   }
 
   getSprite() {
@@ -69,10 +73,10 @@ export class Player {
   }
 
   setHealth(health: number) {
-    this.health = Math.max(0, Math.min(this.healthMax, health));
+    this.health = Phaser.Math.Clamp(health, 0, this.healthMax);
   }
 
-  setInvulnerable(value:boolean = true) {
+  setInvulnerable(value: boolean = true) {
     this.isInvulnerable = value;
   }
 
@@ -81,7 +85,7 @@ export class Player {
   }
 
   isMoving(threshold: number) {
-    return this.movementController.isMoving(threshold)
+    return this.movementController.isMoving(threshold);
   }
 
   canInvulnerable() {
@@ -91,20 +95,17 @@ export class Player {
   takeDamage(amount: number = 1) {
     if (!this.alive || this.isInvulnerable) return;
 
-    this.setHealth(Math.max(0, this.health - amount));
+    this.setHealth(this.health - amount);
 
     if (this.health <= 0) {
-      this.scene.time.delayedCall(0, () => {
-        this.die();
-      })
+      this.scene.time.delayedCall(0, () => this.die());
     } else {
-      this.scene.sound.add('fishBubble').play();
+      this.scene.sound.play('fishBubble');
       this.becomeInvulnerable();
     }
   }
 
   die() {
-    const bubbleSound = this.scene.sound.add('fishBubble', { volume: 1 });
     this.alive = false;
     this.movementController.disable();
     this.sprite.stop();
@@ -113,53 +114,48 @@ export class Player {
 
     this.sprite.setTexture('fishBone');
     this.sprite.setTint(0x666666);
-
     this.sprite.setFlipY(true);
+
     (this.sprite.body as Phaser.Physics.Arcade.Body).allowGravity = true;
     this.sprite.setVelocity(
       Phaser.Math.Between(-30, 30),
       Phaser.Math.Between(20, 60)
     );
+
     this.createDeathParticles();
 
     this.scene.time.delayedCall(700, () => {
-      bubbleSound.play();
-    })
+      this.scene.sound.play('fishBubble', { volume: 1 });
+    });
 
     this.scene.events.emit('player-died');
   }
 
   private createSprite() {
-    this.sprite = this.scene.physics.add.sprite(
+    const sprite = this.scene.physics.add.sprite(
       this.scene.scale.width / 2,
       this.scene.scale.height / 2,
       'player'
-    ).setCollideWorldBounds(true)
+    )
+      .setCollideWorldBounds(true)
       .setDamping(true)
       .setDrag(0.25)
       .setMaxVelocity(this.speed);
 
-    this.sprite.setSize(100, 56);
-    this.sprite.setPipeline('Light2D');
+    sprite.setSize(100, 56);
+    sprite.setPipeline('Light2D');
 
-    this.light = this.scene.lights.addLight(
+    return sprite;
+  }
+
+  private createLight() {
+    return this.scene.lights.addLight(
       this.sprite.x,
       this.sprite.y,
       this.lightRadius,
       0xcff1ff,
       1
     );
-
-    this.createTextures()
-    this.setHealth(this.healthMax);
-
-    this.scene.events.on('player-move-start', (direction: string | null) => {
-      //
-    });
-  }
-
-  private createInput() {
-    this.cursors = this.scene.input.keyboard.createCursorKeys();
   }
 
   private handleAnimations(isMoving: boolean) {
@@ -179,9 +175,13 @@ export class Player {
 
   private startIdleTween() {
     if (this.idleTween) return;
+
     this.idleTween = this.scene.tweens.add({
       targets: this.sprite,
-      rotation: { from: Phaser.Math.DegToRad(-this.idleRotationDeg), to: Phaser.Math.DegToRad(this.idleRotationDeg) },
+      rotation: {
+        from: Phaser.Math.DegToRad(-this.idleRotationDeg),
+        to: Phaser.Math.DegToRad(this.idleRotationDeg),
+      },
       yoyo: true,
       repeat: -1,
       duration: this.idleDuration,
@@ -195,10 +195,10 @@ export class Player {
     this.sprite.rotation = 0;
   }
 
-  private updateLight() {
+  private updateLight(delta: number) {
     this.light.x = this.sprite.x;
     this.light.y = this.sprite.y;
-    this.pulseTime += 0.02;
+    this.pulseTime += 0.02 * (delta / REFERENCE_FRAME_MS);
     this.light.intensity = 2.5 + Math.sin(this.pulseTime) * 0.5;
   }
 
@@ -220,58 +220,36 @@ export class Player {
   }
 
   private createMoveWave() {
-    if (!this.isWaveTextureCreated) {
-      const wave = this.scene.add.graphics();
-      wave.fillStyle(0x88CCEE, 0.5);
-      const outerWidth = 60;
-      const outerHeight = 30;
-      const innerWidth = 48;
-      const innerHeight = 24;
-      const centerX = 30;
-      const centerY = 30;
-      wave.beginPath();
-      wave.fillEllipse(centerX, centerY, outerWidth, outerHeight);
-      wave.beginPath();
-      wave.fillStyle(0x000000, 1);
-      wave.fillEllipse(centerX, centerY, innerWidth, innerHeight);
-      wave.closePath();
-      wave.generateTexture(this.waveTexture, 60, 30);
-      wave.destroy();
-      this.isWaveTextureCreated = true;
-    }
+    const velocity = this.sprite.body.velocity;
+    let angle: number;
 
-    const velocityX = this.sprite.body.velocity.x;
-    const velocityY = this.sprite.body.velocity.y;
-
-    let angle = 0;
-
-    if (Math.abs(velocityX) > Math.abs(velocityY)) {
-      angle = velocityX > 0 ? 270 : 90;
+    if (Math.abs(velocity.x) > Math.abs(velocity.y)) {
+      angle = velocity.x > 0 ? 270 : 90;
     } else {
-      angle = velocityY > 0 ? 0 : 180;
+      angle = velocity.y > 0 ? 0 : 180;
     }
 
-    const sprite = this.scene.add.image(this.sprite.x, this.sprite.y, this.waveTexture)
+    const wave = this.scene.add.image(this.sprite.x, this.sprite.y, WAVE_TEXTURE)
       .setOrigin(0.5)
       .setAlpha(0.4)
       .setScale(0.1)
       .setToTop()
       .setAngle(angle);
 
-    sprite.postFX.addBlur(10);
+    wave.postFX.addBlur(10);
 
     this.scene.tweens.add({
-      targets: sprite,
+      targets: wave,
       alpha: 0,
       scale: 2.5,
       duration: 700,
       ease: 'Sine.easeOut',
-      onComplete: () => sprite.destroy()
+      onComplete: () => wave.destroy()
     });
   }
 
   private createDeathParticles() {
-    const particles = this.scene.add.particles(this.sprite.x, this.sprite.y, 'bones', {
+    const particles = this.scene.add.particles(this.sprite.x, this.sprite.y, BONE_TEXTURE, {
       lifespan: 5000,
       speed: { min: 10, max: 40 },
       angle: { min: 0, max: 360 },
@@ -284,25 +262,31 @@ export class Player {
     });
 
     particles.explode(15);
+    this.scene.time.delayedCall(5100, () => particles.destroy());
   }
 
   private createTextures() {
-    const bone = this.scene.add.graphics();
-    bone.fillStyle(0xffffff, 1);
+    ensureTexture(this.scene, BONE_TEXTURE, 6, 18, graphics => {
+      const width = 6;
+      const height = 18;
 
-    const width = 6;
-    const height = 18;
-    const points = [
-      { x: width / 2, y: 0 },
-      { x: 0, y: height },
-      { x: width, y: height },
-    ];
+      graphics.fillStyle(0xffffff, 1);
+      graphics.fillPoints([
+        { x: width / 2, y: 0 },
+        { x: 0, y: height },
+        { x: width, y: height },
+      ], true);
+      graphics.setAlpha(0.3);
+    });
 
-    bone.beginPath();
-    bone.fillPoints(points, true);
-    bone.closePath();
-    bone.setAlpha(.3)
-    bone.generateTexture('bones', width, height);
-    bone.destroy();
+    ensureTexture(this.scene, WAVE_TEXTURE, 60, 30, graphics => {
+      const centerX = 30;
+      const centerY = 30;
+
+      graphics.fillStyle(0x88CCEE, 0.5);
+      graphics.fillEllipse(centerX, centerY, 60, 30);
+      graphics.fillStyle(0x000000, 1);
+      graphics.fillEllipse(centerX, centerY, 48, 24);
+    });
   }
 }

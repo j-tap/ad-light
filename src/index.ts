@@ -3,26 +3,26 @@ import { phaserConfig } from './config';
 import BootScene from './scenes/BootScene';
 import PreloadScene from './scenes/PreloadScene';
 import StartScene from './scenes/StartScene';
-import GameScene from './scenes/GameScene';
 import PauseScene from './scenes/PauseScene';
 import GameOverScene from './scenes/GameOverScene';
 import WinScene from './scenes/WinScene';
 import EndScene from './scenes/EndScene';
 
-const levels = Object.values(
-  import.meta.glob('./scenes/levels/*.ts', { eager: true })
-).map((mod: any) => mod.default);
+type SceneModule = { default: new () => Phaser.Scene };
+
+const levelScenes = Object.values(
+  import.meta.glob<SceneModule>('./scenes/levels/*.ts', { eager: true })
+).map(module => module.default);
 
 phaserConfig.scene = [
   BootScene,
   PreloadScene,
   StartScene,
-  GameScene,
   PauseScene,
   GameOverScene,
   WinScene,
   EndScene,
-  ...levels,
+  ...levelScenes,
 ];
 
 new Phaser.Game(phaserConfig);

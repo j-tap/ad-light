@@ -1,200 +1,218 @@
+import Phaser from 'phaser';
 import BaseScene from './BaseScene';
 import { Player } from '../game/Player';
 import { LevelManager } from '../game/LevelManager';
 import { GameManager } from '../game/GameManager';
-import {LevelConfig} from '../config'
+import { config, LevelConfig } from '../config';
+
+const UI_DEPTH = 100;
+const HEART_SPACING = 40;
+const DEATH_DELAY = 2500;
+const WIN_DELAY = 500;
 
 export default class GameScene extends BaseScene {
   protected readonly cameraBackgroundColor = '#000000';
+  protected readonly ambientColor = 0x1a2a6c;
+  protected readonly levelConfig: LevelConfig;
   protected gameManager!: GameManager;
-  protected player!: Player;
   protected levelManager!: LevelManager;
+  protected player!: Player;
   protected ground!: Phaser.Physics.Arcade.StaticGroup;
-  protected scoreText!: Phaser.GameObjects.Text;
-  protected currentMusic!: Phaser.Sound.BaseSound;
-  protected hearts: Phaser.GameObjects.Text[] = [];
-  protected musicKeys = [];
-  protected levelConfig: LevelConfig;
-  protected currentTrackIndex = 0;
-  protected ambientColor: number = 0x1a2a6c;
-  public nextScene: string
+  private groundBody?: Phaser.Physics.Arcade.Sprite;
+  private scoreText!: Phaser.GameObjects.Text;
+  private hearts: Phaser.GameObjects.Text[] = [];
+  private currentMusic?: Phaser.Sound.BaseSound;
+  private currentTrackIndex = 0;
+  private lastScore = -1;
+  private lastHealth = -1;
 
-  constructor(key: string) {
+  constructor(key: string, levelConfig: LevelConfig) {
     super(key);
+    this.levelConfig = levelConfig;
   }
 
   create() {
+    super.create();
+
     this.gameManager = new GameManager(this);
     this.levelManager = new LevelManager(this);
     this.gameManager.setCurrentLevel(this.scene.key);
 
-    this.createLighting();
-    this.createAnimations();
+    this.lights.enable().setAmbientColor(this.ambientColor);
+
     this.setupMusic();
-    this.createUI();
     this.setupEvents();
     this.createLevel();
-    this.setupPlayerUI();
-    this.setupCollisions();
-    this.fadeIn();
+    this.createPlayerUI();
+
+    this.physics.add.collider(this.player.getSprite(), this.ground);
   }
 
-  createLevel() {}
-
   update(time: number, delta: number) {
-    this.gameManager.update(time, delta);
+    this.levelManager.update();
+    this.gameManager.update();
 
     if (!this.gameManager.isPlaying()) return;
 
     this.player.update(time, delta);
-    this.levelManager.update();
-
     this.updateUI();
   }
 
-  createUI() {}
+  protected createLevel() {
+    const { width, textures, plankton } = this.levelConfig;
 
-  updateUI() {}
+    this.physics.world.gravity.y = config.world.gravityY;
+    this.physics.world.setBounds(0, 0, width, this.scale.height);
 
-  createAnimations() {
-    this.anims.create({
-      key: 'swim',
-      frames: this.anims.generateFrameNumbers('player', { start: 0, end: 2 }),
-      frameRate: 8,
-      repeat: -1,
-    });
+    this.levelManager.createLevel({ textures, plankton: plankton !== false });
+    this.createGround();
 
-    this.anims.create({
-      key: 'enemy-swim',
-      frames: this.anims.generateFrameNumbers('enemy1', { start: 0, end: 2 }),
-      frameRate: 6,
-      repeat: -1,
-    });
+    this.player = new Player(this);
+    this.createCamera();
 
-    this.anims.create({
-      key: 'enemy-attack',
-      frames: [
-        { key: 'enemy1', frame: 2 },
-        { key: 'enemy1', frame: 3 },
-      ],
-      frameRate: 6,
-      repeat: 1,
-    });
+    this.gameManager.setPlayer(this.player);
+    this.gameManager.startGame(this.levelConfig);
+    this.gameManager.setupCollisions(this.player);
   }
 
-  setupMusic() {
-    this.currentTrackIndex = Phaser.Math.Between(0, this.musicKeys.length - 1);
-    this.playNextTrack();
+  private createCamera() {
+    const camera = this.cameras.main;
+
+    camera.setBounds(0, 0, this.levelConfig.width, this.scale.height);
+    camera.startFollow(this.player.getSprite(), true, 0.09, 0.09, 0, 0);
+    camera.setLerp(0.1, 0.1);
+    camera.setRoundPixels(false);
+    camera.setDeadzone(0, 150);
+    camera.setBackgroundColor(this.cameraBackgroundColor);
   }
 
-  playNextTrack() {
-    if (this.currentMusic) {
-      this.currentMusic.destroy();
-    }
+  private createGround() {
+    this.ground = this.physics.add.staticGroup();
+    this.groundBody = this.ground.create(0, 0) as Phaser.Physics.Arcade.Sprite;
+    this.groundBody.setVisible(false);
 
-    const musicKey = this.musicKeys[this.currentTrackIndex];
-    this.currentMusic = this.sound.add(musicKey, { volume: 0.5 });
+    this.layoutGround();
+  }
+
+  private layoutGround() {
+    const { groundHeight, groundOffsetY } = config.world;
+
+    this.groundBody
+      ?.setOrigin(0.5)
+      .setPosition(this.levelConfig.width / 2, this.scale.height - groundOffsetY)
+      .setDisplaySize(this.levelConfig.width, groundHeight)
+      .refreshBody();
+  }
+
+  private setupMusic() {
+    if (!this.levelConfig.music.length) return;
+
+    this.currentTrackIndex = Phaser.Math.Between(0, this.levelConfig.music.length - 1);
+    this.playCurrentTrack();
+  }
+
+  private playCurrentTrack() {
+    const tracks = this.levelConfig.music;
+    const isSingleTrack = tracks.length === 1;
+
+    this.currentMusic?.destroy();
+    this.currentMusic = this.sound.add(tracks[this.currentTrackIndex], {
+      volume: 0.5,
+      loop: isSingleTrack,
+    });
     this.currentMusic.play();
 
-    this.currentMusic.once('complete', () => {
-      this.currentTrackIndex = this.getRandomTrackIndex(this.currentTrackIndex);
-      this.playNextTrack();
+    if (isSingleTrack) return;
+
+    this.currentMusic.once(Phaser.Sound.Events.COMPLETE, () => {
+      const step = Phaser.Math.Between(1, tracks.length - 1);
+      this.currentTrackIndex = (this.currentTrackIndex + step) % tracks.length;
+      this.playCurrentTrack();
     });
   }
 
-  getRandomTrackIndex(exclude: number): number {
-    let index;
-    do {
-      index = Phaser.Math.Between(0, this.musicKeys.length - 1);
-    } while (index === exclude);
-    return index;
-  }
+  private setupEvents() {
+    this.onResize(() => this.handleResize());
 
-  setupEvents() {
-    this.scale.on('resize', () => {});
-
-    this.input.keyboard.on('keydown-ESC', () => {
+    this.input.keyboard?.on('keydown-ESC', () => {
       if (this.gameManager.isPlaying()) {
         this.gameManager.pauseGame();
       }
     });
 
-    this.events.on('resume-game', () => {
+    this.onSceneEvent('resume-game', () => {
       this.gameManager.resumeGame();
       this.currentMusic?.resume();
     });
 
-    this.events.on('pause', () => {
-      this.currentMusic?.pause();
+    this.onSceneEvent(Phaser.Scenes.Events.PAUSE, () => this.currentMusic?.pause());
+    this.onSceneEvent('player-died', () => this.handlePlayerDied());
+    this.onSceneEvent('player-win', () => {
+      this.time.delayedCall(WIN_DELAY, () => this.fadeToScene(this.levelConfig.nextScene));
     });
 
-    this.events.on('shutdown', () => {
-      this.currentMusic?.stop();
-    });
-
-    this.events.on('player-died', () => {
-      this.currentMusic.stop();
-      this.gameManager.loseGame();
-
-      this.time.delayedCall(2500, () => {
-        this.fadeToScene('GameOverScene', { level: this.gameManager.getLastLevel() });
-      });
-    });
-
-    this.events.on('player-win', () => {
-      this.time.delayedCall(500, () => {
-        this.fadeToScene(this.nextScene);
-      });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.currentMusic?.destroy();
+      this.currentMusic = undefined;
     });
   }
 
-  setupPlayerUI() {
-    this.scoreText = this.add.text(20, 20, 'Mollusks: 0/0', {
+  private handlePlayerDied() {
+    this.currentMusic?.stop();
+    this.gameManager.loseGame();
+
+    this.time.delayedCall(DEATH_DELAY, () => {
+      this.fadeToScene('GameOverScene', { level: this.gameManager.getLastLevel() });
+    });
+  }
+
+  private handleResize() {
+    if (!this.groundBody) return;
+
+    this.physics.world.setBounds(0, 0, this.levelConfig.width, this.scale.height);
+    this.cameras.main.setBounds(0, 0, this.levelConfig.width, this.scale.height);
+
+    this.layoutGround();
+    this.levelManager.resize();
+  }
+
+  private createPlayerUI() {
+    this.scoreText = this.add.text(20, 20, '', {
       fontSize: '24px',
       color: '#dcdcdc',
       fontFamily: 'Arial'
-    }).setScrollFactor(0);
+    })
+      .setScrollFactor(0)
+      .setDepth(UI_DEPTH);
 
-    this.createHearts();
-  }
-
-  createHearts() {
-    this.hearts.forEach(heart => heart.destroy());
     this.hearts = [];
 
-    const heartSpacing = 40;
-    const startX = 20;
-    const startY = 70;
-
-    for (let i = 0; i < this.player.getHealth(); i++) {
-      const heart = this.add.text(startX + i * heartSpacing, startY, '❤️', {
-        fontSize: '32px'
-      })
-        .setAlpha(0.6)
-        .setScrollFactor(0);
-
-      this.hearts.push(heart);
+    for (let i = 0; i < config.player.maxHealth; i++) {
+      this.hearts.push(
+        this.add.text(20 + i * HEART_SPACING, 70, '❤️', { fontSize: '32px' })
+          .setAlpha(0.6)
+          .setScrollFactor(0)
+          .setDepth(UI_DEPTH)
+      );
     }
+
+    this.lastScore = -1;
+    this.lastHealth = -1;
+    this.updateUI();
   }
 
-  createCamera() {
-    this.cameras.main.setBounds(0, 0, this.levelConfig.width, this.scale.height);
-    this.cameras.main.startFollow(this.player.getSprite(), true, 0.09, 0.09, 0, 0);
-    this.cameras.main.setLerp(0.1, 0.1);
-    this.cameras.main.setRoundPixels(false);
-    this.cameras.main.setDeadzone(0, 150);
-    this.cameras.main.setBackgroundColor(this.cameraBackgroundColor);
-  }
+  private updateUI() {
+    const score = this.gameManager.getScore();
+    const health = this.player.getHealth();
 
-  startGame() {
-    this.gameManager.startGame(this.levelConfig);
-  }
+    if (score !== this.lastScore) {
+      this.lastScore = score;
+      this.scoreText.setText(`Mollusks: ${score}/${this.levelConfig.mollusks.count}`);
+    }
 
-  private createLighting() {
-    this.lights.enable().setAmbientColor(this.ambientColor);
-  }
-
-  private setupCollisions() {
-    this.physics.add.collider(this.player.getSprite(), this.ground);
+    if (health !== this.lastHealth) {
+      this.lastHealth = health;
+      this.hearts.forEach((heart, index) => heart.setVisible(index < health));
+    }
   }
 }

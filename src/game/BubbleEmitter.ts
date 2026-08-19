@@ -1,35 +1,77 @@
 import Phaser from 'phaser';
+import { ensureTexture } from './textures';
+
+export interface BubbleEmitterConfig {
+  minDelay?: number,
+  maxDelay?: number,
+  minCount?: number,
+  maxCount?: number,
+}
+
+const BUBBLE_TEXTURE = 'bubbleTexture';
+const BUBBLE_TEXTURE_SIZE = 32;
 
 export class BubbleEmitter {
-  private bubbles: Phaser.GameObjects.Group;
-  private bubbleTimer: Phaser.Time.TimerEvent;
+  private readonly scene: Phaser.Scene;
+  private readonly sprite?: Phaser.GameObjects.Sprite;
+  private readonly minDelay: number;
+  private readonly maxDelay: number;
+  private readonly minCount: number;
+  private readonly maxCount: number;
+  private readonly timer: Phaser.Time.TimerEvent;
 
-  constructor(private scene: Phaser.Scene, private sprite?: Phaser.Physics.Arcade.Sprite) {
-    this.bubbles = this.scene.add.group();
+  constructor(scene: Phaser.Scene, sprite?: Phaser.GameObjects.Sprite, config: BubbleEmitterConfig = {}) {
+    this.scene = scene;
+    this.sprite = sprite;
+    this.minDelay = config.minDelay ?? 3000;
+    this.maxDelay = config.maxDelay ?? 5000;
+    this.minCount = config.minCount ?? 1;
+    this.maxCount = config.maxCount ?? 5;
 
-    this.bubbleTimer = this.scene.time.addEvent({
-      delay: Phaser.Math.Between(3000, 5000),
+    ensureTexture(scene, BUBBLE_TEXTURE, BUBBLE_TEXTURE_SIZE, BUBBLE_TEXTURE_SIZE, graphics => {
+      graphics.fillStyle(0xadd8e6, 1);
+      graphics.fillCircle(BUBBLE_TEXTURE_SIZE / 2, BUBBLE_TEXTURE_SIZE / 2, BUBBLE_TEXTURE_SIZE / 2);
+    });
+
+    this.timer = this.scene.time.addEvent({
+      delay: this.nextDelay(),
       loop: true,
-      callback: () => this.emitBubbles()
+      callbackScope: this,
+      callback: this.emitScheduled,
     });
   }
 
-  private emitBubbles() {
-    const count = Phaser.Math.Between(1, 5);
-    for (let i = 0; i < count; i++) {
+  emitBurst(count?: number) {
+    const total = count ?? Phaser.Math.Between(this.minCount, this.maxCount);
+
+    for (let i = 0; i < total; i++) {
       this.spawnBubble();
     }
+  }
 
-    this.bubbleTimer.reset({
-      delay: Phaser.Math.Between(3000, 5000),
-      callback: this.emitBubbles,
+  stop() {
+    this.timer.remove(false);
+  }
+
+  private emitScheduled() {
+    this.emitBurst();
+
+    this.timer.reset({
+      delay: this.nextDelay(),
+      loop: true,
       callbackScope: this,
-      loop: true
+      callback: this.emitScheduled,
     });
+  }
+
+  private nextDelay() {
+    return Phaser.Math.Between(this.minDelay, this.maxDelay);
   }
 
   private spawnBubble() {
-    let bubbleX, bubbleY;
+    const size = Phaser.Math.Between(4, 10);
+    let bubbleX: number;
+    let bubbleY: number;
 
     if (this.sprite) {
       const offsetX = this.sprite.flipX ? -this.sprite.width * 0.4 : this.sprite.width * 0.4;
@@ -40,49 +82,20 @@ export class BubbleEmitter {
       bubbleY = this.scene.scale.height + Phaser.Math.Between(0, 100);
     }
 
-    const size = Phaser.Math.Between(4, 10);
-
-    const bubble = this.scene.add.ellipse(
-      bubbleX,
-      bubbleY,
-      size,
-      size,
-      0xadd8e6,
-      0.6
-    );
-
-    this.bubbles.add(bubble);
+    const bubble = this.scene.add.image(bubbleX, bubbleY, BUBBLE_TEXTURE)
+      .setDisplaySize(size, size)
+      .setAlpha(0.6);
 
     this.scene.tweens.add({
       targets: bubble,
       x: bubbleX + Phaser.Math.Between(-10, 10),
       y: -size,
       alpha: 0,
-      scaleX: 0.5,
-      scaleY: 0.5,
+      displayWidth: size * 0.5,
+      displayHeight: size * 0.5,
       duration: Phaser.Math.Between(3000, 6000),
       ease: 'Sine.easeOut',
       onComplete: () => bubble.destroy()
-    });
-  }
-
-  emitBurst(count: number = null) {
-    const cnt = count || Phaser.Math.Between(3, 8);
-    for (let i = 0; i < cnt; i++) {
-      this.spawnBubble();
-    }
-  }
-
-  stop() {
-    this.bubbleTimer?.remove(false);
-  }
-
-  setTiming(minDelay: number, maxDelay: number) {
-    this.bubbleTimer.reset({
-      delay: Phaser.Math.Between(minDelay, maxDelay),
-      callback: this.emitBubbles,
-      callbackScope: this,
-      loop: true
     });
   }
 }

@@ -1,9 +1,14 @@
+import Phaser from 'phaser';
+import Label from 'phaser3-rex-plugins/templates/ui/label/Label';
 import BaseScene from './BaseScene';
 import { GUI } from '../ui/Gui';
 
 export default class PauseScene extends BaseScene {
-  private targetScene!: string;
   private gui!: GUI;
+  private overlay!: Phaser.GameObjects.Rectangle;
+  private title!: Phaser.GameObjects.Text;
+  private buttons: Label[] = [];
+  private targetScene!: string;
 
   constructor() {
     super('PauseScene');
@@ -14,37 +19,50 @@ export default class PauseScene extends BaseScene {
   }
 
   create() {
+    super.create();
+
     this.gui = new GUI(this);
 
-    this.input.keyboard.on('keydown-ESC', () => {
-      this.resume();
-    });
-
     this.createUI();
+    this.layout();
 
-    this.cameras.main.fadeIn(300, 0, 0, 0);
+    this.onResize(() => this.layout());
+
+    this.input.keyboard?.on('keydown-ESC', () => this.resume());
   }
 
-  createUI() {
-    this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.7)
+  private createUI() {
+    this.overlay = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.7)
       .setOrigin(0);
 
-    this.add.text(this.centerX, this.centerY - 150, 'PAUSED', {
+    this.title = this.add.text(0, 0, 'PAUSED', {
       fontSize: '48px',
       color: '#ffffff'
-    }).setOrigin(0.5);
+    })
+      .setOrigin(0.5);
 
-    const btn1 = this.gui.createButton(this.centerX, this.centerY - 50, 'Resume', () => {
-      this.resume();
-    });
+    this.buttons = [
+      this.gui.createButton(0, 0, 'Resume', () => this.resume()),
+      this.gui.createButton(0, 0, 'Exit to Menu', () => {
+        this.scene.stop(this.targetScene);
+        this.fadeToScene('StartScene');
+      }),
+    ];
+  }
 
-    this.gui.createButton(this.centerX, btn1.y + btn1.height + 15, 'Exit to Menu', () => {
-      this.scene.stop(this.targetScene);
-      this.fadeToScene('StartScene');
+  private layout() {
+    this.overlay.setSize(this.scale.width, this.scale.height);
+    this.title.setPosition(this.centerX, this.centerY - 150);
+
+    let y = this.centerY - 50;
+
+    this.buttons.forEach(button => {
+      button.setPosition(this.centerX, y).layout();
+      y += button.height + 15;
     });
   }
 
-  resume() {
+  private resume() {
     this.scene.stop();
     this.scene.resume(this.targetScene);
     this.scene.get(this.targetScene).events.emit('resume-game');

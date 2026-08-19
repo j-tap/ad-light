@@ -1,37 +1,48 @@
 import Phaser from 'phaser';
+import BaseScene from './BaseScene';
 import { GUI } from '../ui/Gui';
-import { BubbleEmitter } from '../game/BubbleEmitter'
-import BaseScene from './BaseScene'
+import { BubbleEmitter } from '../game/BubbleEmitter';
+
+const CREDITS_DELAY = 3600;
 
 export default class WinScene extends BaseScene {
   private gui!: GUI;
-  private bg: Phaser.GameObjects.Image;
-  private bubbleEmitter: BubbleEmitter;
-  private music: Phaser.Sound.BaseSound;
+  private background!: Phaser.GameObjects.Image;
+  private title!: Phaser.GameObjects.Text;
+  private music!: Phaser.Sound.BaseSound;
 
   constructor() {
     super('WinScene');
   }
 
   create() {
+    super.create();
+
     this.gui = new GUI(this);
 
-    this.music = this.sound.add('victory', { volume: 0.4 })
+    // Kept alive on purpose: EndScene keeps playing the same track over the credits.
+    this.music = this.sound.add('victory', { volume: 0.4 });
     this.music.play();
 
-    this.createBg();
+    this.createBackground();
     this.createUI();
-    this.fadeIn();
+    this.layout();
 
-    this.time.delayedCall(3600, () => {
+    this.onResize(() => this.layout());
+
+    this.time.delayedCall(CREDITS_DELAY, () => {
       this.fadeToScene('EndScene', { music: this.music });
-    })
+    });
   }
 
-  resize(gameSize: Phaser.Structs.Size) {}
+  private createBackground() {
+    this.background = this.gui.createFullscreenBackground('winBg', 'bottom');
 
-  createUI() {
-    const text = this.add.text(this.centerX, this.centerY / 3, 'You survived', {
+    new BubbleEmitter(this, undefined, { minDelay: 1000, maxDelay: 1000 });
+  }
+
+  private createUI() {
+    this.title = this.add.text(0, 0, 'You survived', {
       fontSize: '44px',
       color: '#dcdcdc',
       fontFamily: 'Arial'
@@ -40,17 +51,15 @@ export default class WinScene extends BaseScene {
       .setScrollFactor(0);
 
     this.tweens.add({
-      targets: text,
+      targets: this.title,
       alpha: { from: 0, to: 1 },
       duration: 500,
       ease: 'Sine.easeInOut'
     });
   }
 
-  createBg() {
-    this.bg = this.gui.createFullscreenBackground('winBg', 'bottom');
-
-    this.bubbleEmitter = new BubbleEmitter(this);
-    this.bubbleEmitter.setTiming(1000, 1000);
+  private layout() {
+    this.gui.resizeFullscreenBackground(this.background);
+    this.title.setPosition(this.centerX, this.centerY / 3);
   }
 }

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { Enemy } from './Enemy';
 import { Mollusk } from './Mollusk';
 import { Player } from './Player';
-import type { MolluskConfig, EnemiesConfig, LevelConfig } from '../config'
+import type { MolluskConfig, EnemiesConfig, LevelConfig } from '../config';
 
 export enum GameState {
   Start,
@@ -12,58 +12,54 @@ export enum GameState {
   Lose
 }
 
+const SPAWN_MIN_DISTANCE_TO_PLAYER = 300;
+const SPAWN_MAX_TRIES = 20;
+
 export class GameManager {
   private readonly scene: Phaser.Scene;
-  private readonly enemiesGroup!: Phaser.Physics.Arcade.Group;
-  private readonly mollusksGroup!: Phaser.Physics.Arcade.Group;
+  private readonly enemiesGroup: Phaser.Physics.Arcade.Group;
+  private readonly mollusksGroup: Phaser.Physics.Arcade.Group;
+  private readonly mouthsGroup: Phaser.Physics.Arcade.Group;
+  private readonly enemyByObject = new WeakMap<Phaser.GameObjects.GameObject, Enemy>();
+  private readonly molluskBySprite = new WeakMap<Phaser.GameObjects.GameObject, Mollusk>();
   private state: GameState = GameState.Start;
   private enemies: Enemy[] = [];
   private mollusks: Mollusk[] = [];
   private score = 0;
   private player!: Player;
-  private lastLevel: string;
-  public molluskCount = 0;
+  private lastLevel = '';
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
 
     this.enemiesGroup = this.createPhysicsGroup();
     this.mollusksGroup = this.createPhysicsGroup();
+    // A group re-applies its defaults to every added body, so gravity/immovable must be declared here.
+    this.mouthsGroup = this.scene.physics.add.group({ allowGravity: false, immovable: true });
 
     this.scene.physics.add.collider(this.enemiesGroup, this.enemiesGroup);
+    this.scene.physics.world.on('worldbounds', this.handleWorldBounds, this);
   }
 
-  getMolluskCount(): number {
-    return this.molluskCount;
-  }
-
-  private createPhysicsGroup() {
-    return this.scene.physics.add.group({
-      allowGravity: false,
-      collideWorldBounds: true,
-      immovable: false,
-      bounceX: 0.5,
-      bounceY: 0.5
-    });
+  setPlayer(player: Player) {
+    this.player = player;
   }
 
   startGame(config: LevelConfig) {
-    this.molluskCount = config.mollusks.count;
     this.score = 0;
-    this.state = GameState.Playing;
     this.player.setInvulnerable(false);
 
     this.spawnEnemies(config.enemies);
     this.spawnMollusks(config.mollusks);
+
+    this.state = GameState.Playing;
   }
 
   pauseGame() {
     this.state = GameState.Paused;
     this.scene.scene.launch('PauseScene', { target: this.scene.scene.key });
     this.scene.scene.bringToTop('PauseScene');
-    this.scene.time.delayedCall(0, () => {
-      this.scene.scene.pause();
-    });
+    this.scene.time.delayedCall(0, () => this.scene.scene.pause());
   }
 
   resumeGame() {
@@ -90,44 +86,32 @@ export class GameManager {
     return this.score;
   }
 
-  update(time: number, delta: number) {
-    if (!this.isPlaying()) return;
-
-    this.enemies.forEach(enemy => enemy.update(this.player.getSprite().x, this.player.getSprite().y, this.player.isAlive()));
-    this.checkWinLoseConditions();
-  }
-
   isPlaying(): boolean {
     return this.state === GameState.Playing;
   }
 
-  isPaused(): boolean {
-    return this.state === GameState.Paused;
-  }
+  update() {
+    if (!this.isPlaying()) return;
 
-  checkWinLoseConditions() {
-    if (this.isPlaying() && this.mollusks.length === 0) {
+    const playerSprite = this.player.getSprite();
+    const isPlayerAlive = this.player.isAlive();
+
+    this.enemies.forEach(enemy => enemy.update(playerSprite.x, playerSprite.y, isPlayerAlive));
+
+    if (this.mollusks.length === 0) {
       this.winGame();
     }
   }
 
-  getEnemiesGroup(): Phaser.Physics.Arcade.Group {
-    return this.enemiesGroup;
-  }
-
-  setPlayer(player: Player) {
-    this.player = player;
-  }
-
   setupCollisions(player: Player) {
-    this.enemies.forEach(enemy => {
-      this.scene.physics.add.overlap(player.getSprite(), enemy.getMouthCollider(), () => {
-        this.handlePlayerDeath();
-        enemy.onPlayerHit();
-      });
+    const playerSprite = player.getSprite();
+
+    this.scene.physics.add.overlap(playerSprite, this.mouthsGroup, (_player, mouth) => {
+      this.damagePlayer();
+      this.enemyByObject.get(mouth as Phaser.GameObjects.GameObject)?.onPlayerHit();
     });
 
-    this.scene.physics.add.overlap(player.getSprite(), this.mollusksGroup, this.collectMollusk, undefined, this);
+    this.scene.physics.add.overlap(playerSprite, this.mollusksGroup, this.collectMollusk, undefined, this);
   }
 
   setCurrentLevel(levelKey: string) {
@@ -138,39 +122,54 @@ export class GameManager {
     return this.lastLevel;
   }
 
-  private handlePlayerDeath() {
-    const player = (this.scene as any).player;
+  private createPhysicsGroup() {
+    return this.scene.physics.add.group({
+      allowGravity: false,
+      collideWorldBounds: true,
+      immovable: false,
+      bounceX: 0.5,
+      bounceY: 0.5
+    });
+  }
 
-    if (!player || !player.isAlive()) return;
+  private handleWorldBounds(body: Phaser.Physics.Arcade.Body) {
+    this.enemyByObject.get(body.gameObject)?.bounceOffBounds(body);
+  }
 
-    if (typeof player.canInvulnerable === 'function' && player.canInvulnerable()) {
-      return;
-    }
+  private damagePlayer() {
+    if (!this.player.isAlive() || this.player.canInvulnerable()) return;
 
-    this.scene.sound.add('eat', { volume: 0.5 }).play();
-
-    player.takeDamage(1);
+    this.scene.sound.play('eat', { volume: 0.5 });
+    this.player.takeDamage(1);
   }
 
   private spawnEnemies(enemies: EnemiesConfig) {
     const { width, height } = this.scene.physics.world.bounds;
-    const playerSprite = this.player.getSprite();
-    const playerX = playerSprite.x;
-    const playerY = playerSprite.y;
-    const minDistance = 300;
+    const { x: playerX, y: playerY } = this.player.getSprite();
 
     for (let i = 0; i < enemies.count; i++) {
-      let x: number, y: number, tries = 0;
+      let x: number;
+      let y: number;
+      let tries = 0;
 
       do {
         x = Phaser.Math.Between(0, width);
         y = Phaser.Math.Between(50, height - 100);
         tries++;
-      } while (Phaser.Math.Distance.Between(x, y, playerX, playerY) < minDistance && tries < 20);
+      } while (
+        Phaser.Math.Distance.Between(x, y, playerX, playerY) < SPAWN_MIN_DISTANCE_TO_PLAYER &&
+        tries < SPAWN_MAX_TRIES
+      );
 
       const enemy = new Enemy(this.scene, x, y);
+      const sprite = enemy.getSprite();
+      const mouth = enemy.getMouthCollider();
+
       this.enemies.push(enemy);
-      this.enemiesGroup.add(enemy.getSprite());
+      this.enemiesGroup.add(sprite);
+      this.mouthsGroup.add(mouth);
+      this.enemyByObject.set(sprite, enemy);
+      this.enemyByObject.set(mouth, enemy);
     }
   }
 
@@ -182,7 +181,7 @@ export class GameManager {
       left: 0,
       right: 0,
       ...mollusks.indent,
-    }
+    };
 
     for (let i = 0; i < mollusks.count; i++) {
       const x = Phaser.Math.Between(
@@ -195,28 +194,29 @@ export class GameManager {
       );
 
       const mollusk = new Mollusk(this.scene, x, y);
+      const sprite = mollusk.getSprite();
+
       this.mollusks.push(mollusk);
-      this.mollusksGroup.add(mollusk.getSprite());
+      this.mollusksGroup.add(sprite);
+      this.molluskBySprite.set(sprite, mollusk);
     }
   }
 
   private collectMollusk(
-    playerBody: Phaser.Types.Physics.Arcade.GameObjectWithBody,
-    molluskBody: Phaser.Types.Physics.Arcade.GameObjectWithBody
+    _playerSprite: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
+    molluskSprite: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
   ) {
-    const player = (this.scene as any).player;
+    if (!this.player.isAlive()) return;
 
-    if (!player.isAlive()) return
+    const mollusk = this.molluskBySprite.get(molluskSprite as Phaser.GameObjects.GameObject);
 
-    const molluskSprite = molluskBody as Phaser.GameObjects.Sprite;
-    const mollusk = this.mollusks.find(o => o.getSprite() === molluskSprite);
+    if (!mollusk) return;
 
-    const collectSound = this.scene.sound.add('drip', { volume: 0.2 });
-    collectSound.play();
-
-    this.mollusks = this.mollusks.filter(o => o !== mollusk);
-
+    this.molluskBySprite.delete(molluskSprite as Phaser.GameObjects.GameObject);
+    this.mollusks.splice(this.mollusks.indexOf(mollusk), 1);
     mollusk.destroy();
+
+    this.scene.sound.play('drip', { volume: 0.2 });
     this.addScore(1);
   }
 }
