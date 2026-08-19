@@ -133,7 +133,28 @@ export const config = {
     },
   },
   mollusk: {
+    scale: 0.6,
     lightRadius: 100,
+    lightColor: 0x66ccff,
+    nest: {
+      size: { min: 2, max: 4 },
+      radius: 130,
+      spacing: 700,
+      padding: 100,
+    },
+    pulse: {
+      nearDistance: 240,
+      farDistance: 900,
+      slowMs: 2800,
+      fastMs: 900,
+      scaleAmount: 0.12,
+      intensityBase: 1,
+      intensityAmount: 0.55,
+      closenessFloor: 0.25,
+      bobMs: 2200,
+      bobDistance: 5,
+      tiltRad: 0.12,
+    },
   },
   levels: {
     1: {
@@ -216,6 +237,8 @@ export const phaserConfig: Phaser.Types.Core.GameConfig = {
     forceSetTimeOut: true
   },
   render: {
+    // A nest plus a couple of anglers already passes the default cap of ten lights.
+    maxLights: 16,
     roundPixels: false,
     pixelArt: false,
     antialias: true,

@@ -222,6 +222,57 @@ const movingPings = await page.evaluate(() =>
 await page.keyboard.up('ArrowLeft');
 report('swimming emits noise pings', movingPings > 0, `${movingPings} active pings`);
 
+const nests = await page.evaluate(async () => {
+  const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
+  const mollusks = scene.gameManager.mollusks;
+  const points = mollusks.map(m => ({ x: m.getSprite().x, y: m.baseY }));
+
+  // Group by proximity: a nest is a chain of mollusks within one nest diameter.
+  const groups = [];
+
+  points.forEach(point => {
+    const group = groups.find(members =>
+      members.some(member => Math.hypot(member.x - point.x, member.y - point.y) < 300));
+
+    if (group) group.push(point);
+    else groups.push([point]);
+  });
+
+  const near = mollusks[0];
+  const sprite = near.getSprite();
+  const player = scene.player.getSprite();
+
+  sprite.x = player.x + 120;
+  near.baseY = player.y;
+
+  const far = mollusks[mollusks.length - 1];
+
+  far.getSprite().x = player.x + 4000;
+  far.baseY = player.y;
+
+  const samples = { near: [], far: [] };
+
+  for (let i = 0; i < 25; i++) {
+    samples.near.push(near.light.intensity);
+    samples.far.push(far.light.intensity);
+    await new Promise(resolve => setTimeout(resolve, 80));
+  }
+
+  const swing = values => Math.max(...values) - Math.min(...values);
+
+  return {
+    total: mollusks.length,
+    groups: groups.length,
+    nearSwing: swing(samples.near),
+    farSwing: swing(samples.far),
+  };
+});
+
+report('mollusks spawn in nests', nests.groups < nests.total && nests.groups > 0,
+  `${nests.total} mollusks in ${nests.groups} nests`);
+report('mollusk pulse reacts to the player', nests.nearSwing > nests.farSwing,
+  `swing near ${nests.nearSwing.toFixed(2)} vs far ${nests.farSwing.toFixed(2)}`);
+
 const jelly = await page.evaluate(async () => {
   const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
   const enemy = scene.gameManager.enemies.find(e => e.constructor.name === 'Jellyfish');

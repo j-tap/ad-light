@@ -127,6 +127,7 @@ export class GameManager {
     };
 
     this.enemies.forEach(enemy => enemy.update(delta, context));
+    this.mollusks.forEach(mollusk => mollusk.update(delta, playerSprite.x, playerSprite.y));
 
     if (this.mollusks.length === 0) {
       this.winGame();
@@ -223,33 +224,81 @@ export class GameManager {
     return { x, y };
   }
 
+  /** Mollusks come in nests, so the player has to commit to a spot instead of grazing evenly. */
   private spawnMollusks(mollusks: MolluskConfig) {
-    const bounds = this.scene.physics.world.bounds;
-    const indents = {
-      top: 0,
-      bottom: 0,
-      left: 0,
-      right: 0,
-      ...mollusks.indent,
-    };
+    const { nest } = config.mollusk;
+    const area = this.molluskArea(mollusks.indent);
+    const centers: Phaser.Types.Math.Vector2Like[] = [];
 
-    for (let i = 0; i < mollusks.count; i++) {
-      const x = Phaser.Math.Between(
-        bounds.left + 100 + indents.left,
-        bounds.right - 100 - indents.right,
-      );
-      const y = Phaser.Math.Between(
-        bounds.top + 100 + indents.top,
-        bounds.height - 50 - indents.bottom,
+    while (this.mollusks.length < mollusks.count) {
+      const center = this.findNestCenter(area, centers);
+      const size = Math.min(
+        Phaser.Math.Between(nest.size.min, nest.size.max),
+        mollusks.count - this.mollusks.length
       );
 
-      const mollusk = new Mollusk(this.scene, x, y);
-      const sprite = mollusk.getSprite();
+      centers.push(center);
 
-      this.mollusks.push(mollusk);
-      this.mollusksGroup.add(sprite);
-      this.molluskBySprite.set(sprite, mollusk);
+      for (let i = 0; i < size; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = Math.sqrt(Math.random()) * nest.radius;
+
+        this.addMollusk(
+          Phaser.Math.Clamp(center.x + Math.cos(angle) * distance, area.left, area.right),
+          Phaser.Math.Clamp(center.y + Math.sin(angle) * distance, area.top, area.bottom)
+        );
+      }
     }
+  }
+
+  private molluskArea(indent?: SpawnIndent) {
+    const bounds = this.scene.physics.world.bounds;
+    const { padding } = config.mollusk.nest;
+
+    return {
+      left: bounds.left + padding + (indent?.left ?? 0),
+      right: bounds.right - padding - (indent?.right ?? 0),
+      top: bounds.top + padding + (indent?.top ?? 0),
+      bottom: bounds.bottom - padding - (indent?.bottom ?? 0),
+    };
+  }
+
+  private findNestCenter(
+    area: { left: number, right: number, top: number, bottom: number },
+    taken: Phaser.Types.Math.Vector2Like[]
+  ) {
+    const { spacing } = config.mollusk.nest;
+    let best = { x: 0, y: 0 };
+    let bestDistance = -1;
+
+    for (let tries = 0; tries < SPAWN_MAX_TRIES; tries++) {
+      const candidate = {
+        x: Phaser.Math.Between(area.left, area.right),
+        y: Phaser.Math.Between(area.top, area.bottom),
+      };
+      const distance = taken.reduce(
+        (closest, point) => Math.min(closest, Phaser.Math.Distance.BetweenPoints(candidate, point)),
+        Number.POSITIVE_INFINITY
+      );
+
+      if (distance >= spacing) return candidate;
+
+      if (distance > bestDistance) {
+        best = candidate;
+        bestDistance = distance;
+      }
+    }
+
+    return best;
+  }
+
+  private addMollusk(x: number, y: number) {
+    const mollusk = new Mollusk(this.scene, x, y);
+    const sprite = mollusk.getSprite();
+
+    this.mollusks.push(mollusk);
+    this.mollusksGroup.add(sprite);
+    this.molluskBySprite.set(sprite, mollusk);
   }
 
   private collectMollusk(
