@@ -88,6 +88,10 @@ export class Player {
     return this.lightFuel.getRadius();
   }
 
+  isInputActive() {
+    return this.movementController.isInputActive();
+  }
+
   isDimming() {
     return this.dimKey?.isDown === true;
   }

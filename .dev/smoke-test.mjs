@@ -102,15 +102,74 @@ await page.waitForFunction(
 const start = await levelState();
 report('level started', Boolean(start), start ? `${start.key}, enemies ${start.enemies}, mollusks ${start.mollusks}` : 'no level scene');
 
+// Headless frames are slow and Phaser clamps delta, so game time crawls: poll, do not sleep.
+const tutorial = await page.evaluate(async () => {
+  const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
+  const hint = scene.hud.hintText;
+  const zone = 900;
+  const playerX = scene.player.getSprite().x;
+
+  for (let i = 0; i < 100 && hint.alpha < 0.9; i++) {
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+
+  return {
+    text: hint.text,
+    alpha: hint.alpha,
+    enemiesInZone: scene.gameManager.enemies.filter(e => e.getSprite().x < zone).length,
+    mollusksAhead: scene.gameManager.mollusks
+      .filter(m => m.getSprite().x > playerX && m.getSprite().x - playerX < 1000).length,
+    freeScore: scene.gameManager.getScore(),
+  };
+});
+
+report('movement is taught first while the player is idle', tutorial.text.includes('swim'),
+  `"${tutorial.text}" at alpha ${tutorial.alpha.toFixed(2)}`);
+report('opening mollusks are out of reach until the player swims', tutorial.freeScore === 0,
+  `${tutorial.freeScore} collected without input`);
+report('teaching zone is kept clear of enemies', tutorial.enemiesInZone === 0,
+  `${tutorial.enemiesInZone} enemies before x=900`);
+report('teaching zone lays a mollusk trail ahead', tutorial.mollusksAhead >= 3,
+  `${tutorial.mollusksAhead} mollusks within 1000px ahead`);
+
+await page.screenshot({ path: '/tmp/adlight-tutorial.png' });
+
 await page.keyboard.down('ArrowRight');
 await wait(1500);
 await page.keyboard.up('ArrowRight');
 
+const hintAfterMove = await page.evaluate(() => {
+  const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
+  const hint = scene.hud.hintText;
+
+  return { text: hint.text, alpha: hint.alpha };
+});
+report('movement hint gives way once the player swims',
+  hintAfterMove.alpha < 0.5 || hintAfterMove.text !== tutorial.text,
+  `now "${hintAfterMove.text}" at alpha ${hintAfterMove.alpha.toFixed(2)}`);
+
+// Collecting refills the light, so start from a full tank to measure the drain itself.
+const drain = await page.evaluate(async () => {
+  const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
+  const player = scene.player;
+
+  player.refillLight(100);
+
+  const before = { ratio: player.getLightRatio(), radius: player.getLightRadius() };
+
+  for (let i = 0; i < 60 && player.getLightRatio() >= before.ratio; i++) {
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+
+  return { before, ratio: player.getLightRatio(), radius: player.getLightRadius() };
+});
+
+report('light drains while playing', drain.ratio < drain.before.ratio,
+  `${drain.before.ratio.toFixed(3)} -> ${drain.ratio.toFixed(3)}`);
+report('light radius follows fuel', drain.radius < drain.before.radius,
+  `${Math.round(drain.before.radius)} -> ${Math.round(drain.radius)}`);
+
 const afterMove = await levelState();
-report('light drains while playing', afterMove.lightRatio < start.lightRatio,
-  `${start.lightRatio.toFixed(3)} -> ${afterMove.lightRatio.toFixed(3)}`);
-report('light radius follows fuel', afterMove.lightRadius < start.lightRadius,
-  `${Math.round(start.lightRadius)} -> ${Math.round(afterMove.lightRadius)}`);
 
 await page.keyboard.down('Shift');
 const dimmed = await waitForStableRadius();

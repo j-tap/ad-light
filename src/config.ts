@@ -34,6 +34,8 @@ export interface LevelConfig {
   enemies: EnemySpawnConfig[],
   mollusks: MolluskConfig,
   plankton?: boolean,
+  /** Turns the level opening into a scripted teaching zone. */
+  tutorial?: boolean,
 }
 
 export const VERSION = __APP_VERSION__;
@@ -132,6 +134,19 @@ export const config = {
       hitArea: { width: 58, height: 96, offsetX: 0, offsetY: 12 },
     },
   },
+  tutorial: {
+    zoneWidth: 900,
+    molluskCount: 3,
+    molluskLead: 260,
+    molluskSpacing: 190,
+    anglerX: 1700,
+    anglerY: 240,
+    firstHintDelayMs: 2200,
+    hintEnemyDistance: 380,
+    hintHoldMs: 5500,
+    escHintMs: 2500,
+    fadeMs: 400,
+  },
   camera: {
     zoomBase: 1,
     zoomChase: 1.12,
@@ -173,6 +188,7 @@ export const config = {
     1: {
       width: 5000,
       nextScene: 'Level2Scene',
+      tutorial: true,
       music: ['gameMusic1'],
       textures: {
         backgroundFar: 'level1BgFar',

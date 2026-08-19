@@ -67,6 +67,22 @@ export class GameManager {
     return this.threat;
   }
 
+  getNearestMolluskDistance(x: number, y: number) {
+    return this.mollusks.reduce((closest, mollusk) => {
+      const sprite = mollusk.getSprite();
+
+      return Math.min(closest, Phaser.Math.Distance.Between(sprite.x, sprite.y, x, y));
+    }, Number.POSITIVE_INFINITY);
+  }
+
+  getNearestEnemyDistance(x: number, y: number) {
+    return this.enemies.reduce((closest, enemy) => {
+      const sprite = enemy.getSprite();
+
+      return Math.min(closest, Phaser.Math.Distance.Between(sprite.x, sprite.y, x, y));
+    }, Number.POSITIVE_INFINITY);
+  }
+
   setPlayer(player: Player) {
     this.player = player;
   }
@@ -76,8 +92,14 @@ export class GameManager {
     this.noiseField.reset();
     this.player.setInvulnerable(false);
 
-    this.spawnEnemies(level.enemies);
-    this.spawnMollusks(level.mollusks);
+    const teaching = level.tutorial === true;
+
+    this.spawnEnemies(level.enemies, teaching ? config.tutorial.zoneWidth : 0);
+    this.spawnMollusks(level.mollusks, teaching);
+
+    if (teaching) {
+      this.spawnTutorialAngler();
+    }
 
     this.state = GameState.Playing;
   }
@@ -185,32 +207,43 @@ export class GameManager {
     this.player.takeDamage(1);
   }
 
-  private spawnEnemies(spawns: EnemySpawnConfig[]) {
+  private spawnEnemies(spawns: EnemySpawnConfig[], keepOutWidth = 0) {
     spawns.forEach(spawn => {
       const EnemyClass = enemyConstructors[spawn.kind];
 
       for (let i = 0; i < spawn.count; i++) {
-        const { x, y } = this.findEnemySpawnPoint(spawn.indent);
-        const enemy = new EnemyClass(this.scene, x, y);
-        const sprite = enemy.getSprite();
-        const hitArea = enemy.getHitArea();
+        const { x, y } = this.findEnemySpawnPoint(spawn.indent, keepOutWidth);
 
-        this.enemies.push(enemy);
-        this.enemiesGroup.add(sprite);
-        this.enemyByObject.set(sprite, enemy);
-
-        if (hitArea) {
-          this.mouthsGroup.add(hitArea);
-          this.enemyByObject.set(hitArea, enemy);
-        }
+        this.registerEnemy(new EnemyClass(this.scene, x, y));
       }
     });
   }
 
-  private findEnemySpawnPoint(indent?: SpawnIndent) {
+  /** One angler parked in the open, so the lure pattern can be watched from safety. */
+  private spawnTutorialAngler() {
+    const { anglerX, anglerY } = config.tutorial;
+
+    this.registerEnemy(new AnglerFish(this.scene, anglerX, anglerY));
+  }
+
+  private registerEnemy(enemy: BaseEnemy) {
+    const sprite = enemy.getSprite();
+    const hitArea = enemy.getHitArea();
+
+    this.enemies.push(enemy);
+    this.enemiesGroup.add(sprite);
+    this.enemyByObject.set(sprite, enemy);
+
+    if (hitArea) {
+      this.mouthsGroup.add(hitArea);
+      this.enemyByObject.set(hitArea, enemy);
+    }
+  }
+
+  private findEnemySpawnPoint(indent?: SpawnIndent, keepOutWidth = 0) {
     const bounds = this.scene.physics.world.bounds;
     const { x: playerX, y: playerY } = this.player.getSprite();
-    const left = bounds.left + (indent?.left ?? 0);
+    const left = bounds.left + keepOutWidth + (indent?.left ?? 0);
     const right = bounds.right - (indent?.right ?? 0);
     const top = bounds.top + ENEMY_SPAWN_PADDING_TOP + (indent?.top ?? 0);
     const bottom = bounds.bottom - ENEMY_SPAWN_PADDING_BOTTOM - (indent?.bottom ?? 0);
@@ -232,10 +265,15 @@ export class GameManager {
   }
 
   /** Mollusks come in nests, so the player has to commit to a spot instead of grazing evenly. */
-  private spawnMollusks(mollusks: MolluskConfig) {
+  private spawnMollusks(mollusks: MolluskConfig, teaching = false) {
     const { nest } = config.mollusk;
     const area = this.molluskArea(mollusks.indent);
     const centers: Phaser.Types.Math.Vector2Like[] = [];
+
+    if (teaching) {
+      this.spawnTutorialMollusks(area);
+      area.left = Math.max(area.left, config.tutorial.zoneWidth);
+    }
 
     while (this.mollusks.length < mollusks.count) {
       const center = this.findNestCenter(area, centers);
@@ -255,6 +293,19 @@ export class GameManager {
           Phaser.Math.Clamp(center.y + Math.sin(angle) * distance, area.top, area.bottom)
         );
       }
+    }
+  }
+
+  /** A first trail of mollusks laid out ahead of the player, close enough to be seen at once. */
+  private spawnTutorialMollusks(area: { left: number, right: number, top: number, bottom: number }) {
+    const { molluskCount, molluskLead, molluskSpacing } = config.tutorial;
+    const { x: playerX, y: playerY } = this.player.getSprite();
+
+    for (let i = 0; i < molluskCount; i++) {
+      this.addMollusk(
+        Phaser.Math.Clamp(playerX + molluskLead + i * molluskSpacing, area.left, area.right),
+        Phaser.Math.Clamp(playerY + Phaser.Math.Between(-70, 70), area.top, area.bottom)
+      );
     }
   }
 

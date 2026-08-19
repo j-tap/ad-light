@@ -4,6 +4,7 @@ import { Player } from '../game/Player';
 import { LevelManager } from '../game/LevelManager';
 import { GameManager } from '../game/GameManager';
 import { CameraDirector } from '../game/systems/CameraDirector';
+import { TutorialDirector } from '../game/systems/TutorialDirector';
 import { Hud } from '../ui/Hud';
 import { config, LevelConfig } from '../config';
 
@@ -21,6 +22,7 @@ export default class GameScene extends BaseScene {
   protected hud!: Hud;
   protected cameraDirector!: CameraDirector;
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
+  private tutorial?: TutorialDirector;
   private groundBody?: Phaser.Physics.Arcade.Sprite;
   private currentMusic?: Phaser.Sound.BaseSound;
   private currentTrackIndex = 0;
@@ -47,6 +49,10 @@ export default class GameScene extends BaseScene {
     this.updateUI();
     this.createUiCamera();
 
+    if (this.levelConfig.tutorial) {
+      this.tutorial = new TutorialDirector(this.hud, this.player, this.gameManager);
+    }
+
     this.physics.add.collider(this.player.getSprite(), this.ground);
   }
 
@@ -58,6 +64,7 @@ export default class GameScene extends BaseScene {
 
     this.player.update(time, delta);
     this.cameraDirector.update(delta, this.gameManager.getThreat());
+    this.tutorial?.update(delta);
     this.updateUI();
   }
 
@@ -171,7 +178,10 @@ export default class GameScene extends BaseScene {
       this.currentMusic?.resume();
     });
 
-    this.onSceneEvent(Phaser.Scenes.Events.PAUSE, () => this.currentMusic?.pause());
+    this.onSceneEvent(Phaser.Scenes.Events.PAUSE, () => {
+      this.currentMusic?.pause();
+      this.tutorial?.hide();
+    });
     this.onSceneEvent('player-damaged', () => this.cameraDirector.onDamage());
     this.onSceneEvent('player-died', () => this.handlePlayerDied());
     this.onSceneEvent('player-win', () => {
@@ -186,6 +196,7 @@ export default class GameScene extends BaseScene {
 
   private handlePlayerDied() {
     this.currentMusic?.stop();
+    this.tutorial?.hide();
     this.gameManager.loseGame();
 
     this.time.delayedCall(DEATH_DELAY, () => {

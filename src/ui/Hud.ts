@@ -11,6 +11,7 @@ const LIGHT_BAR_HEIGHT = 12;
 const LIGHT_BAR_STEP = 0.01;
 const LIGHT_COLOR_FULL = 0xcff1ff;
 const LIGHT_COLOR_LOW = 0xff6a4a;
+const HINT_BOTTOM_MARGIN = 70;
 
 export class Hud {
   private readonly scene: Phaser.Scene;
@@ -18,6 +19,7 @@ export class Hud {
   private readonly hearts: Phaser.GameObjects.Text[] = [];
   private readonly lightFrame: Phaser.GameObjects.Rectangle;
   private readonly lightFill: Phaser.GameObjects.Rectangle;
+  private readonly hintText: Phaser.GameObjects.Text;
   private lightBlinkTween?: Phaser.Tweens.Tween;
   private lastCollected = -1;
   private lastTotal = -1;
@@ -45,6 +47,16 @@ export class Hud {
     this.lightFill = this.scene.add
       .rectangle(0, 0, LIGHT_BAR_WIDTH, LIGHT_BAR_HEIGHT, LIGHT_COLOR_FULL)
       .setOrigin(0, 0.5);
+
+    this.hintText = this.scene.add
+      .text(0, 0, '', {
+        fontSize: '20px',
+        color: '#e8f4ff',
+        fontFamily: 'Arial',
+        align: 'center',
+      })
+      .setOrigin(0.5, 1)
+      .setAlpha(0);
 
     this.getElements().forEach(element => {
       element.setScrollFactor(0);
@@ -90,6 +102,10 @@ export class Hud {
     });
     this.lightFrame.setPosition(MARGIN, LIGHT_BAR_Y);
     this.lightFill.setPosition(MARGIN, LIGHT_BAR_Y);
+    this.hintText.setPosition(
+      this.scene.scale.width / 2,
+      this.scene.scale.height - HINT_BOTTOM_MARGIN
+    );
   }
 
   private isLowRatio(ratio: number) {
@@ -125,7 +141,26 @@ export class Hud {
     });
   }
 
+  setHint(text: string) {
+    this.hintText.setText(text);
+    this.fadeHint(1);
+  }
+
+  clearHint() {
+    this.fadeHint(0);
+  }
+
+  private fadeHint(alpha: number) {
+    this.scene.tweens.killTweensOf(this.hintText);
+    this.scene.tweens.add({
+      targets: this.hintText,
+      alpha,
+      duration: config.tutorial.fadeMs,
+      ease: 'Quad.easeOut',
+    });
+  }
+
   getElements(): Array<Phaser.GameObjects.Text | Phaser.GameObjects.Rectangle> {
-    return [this.molluskText, ...this.hearts, this.lightFrame, this.lightFill];
+    return [this.molluskText, ...this.hearts, this.lightFrame, this.lightFill, this.hintText];
   }
 }
