@@ -3,10 +3,9 @@ import BaseScene from './BaseScene';
 import { Player } from '../game/Player';
 import { LevelManager } from '../game/LevelManager';
 import { GameManager } from '../game/GameManager';
+import { Hud } from '../ui/Hud';
 import { config, LevelConfig } from '../config';
 
-const UI_DEPTH = 100;
-const HEART_SPACING = 40;
 const DEATH_DELAY = 2500;
 const WIN_DELAY = 500;
 
@@ -18,13 +17,10 @@ export default class GameScene extends BaseScene {
   protected levelManager!: LevelManager;
   protected player!: Player;
   protected ground!: Phaser.Physics.Arcade.StaticGroup;
+  protected hud!: Hud;
   private groundBody?: Phaser.Physics.Arcade.Sprite;
-  private scoreText!: Phaser.GameObjects.Text;
-  private hearts: Phaser.GameObjects.Text[] = [];
   private currentMusic?: Phaser.Sound.BaseSound;
   private currentTrackIndex = 0;
-  private lastScore = -1;
-  private lastHealth = -1;
 
   constructor(key: string, levelConfig: LevelConfig) {
     super(key);
@@ -43,7 +39,9 @@ export default class GameScene extends BaseScene {
     this.setupMusic();
     this.setupEvents();
     this.createLevel();
-    this.createPlayerUI();
+
+    this.hud = new Hud(this);
+    this.updateUI();
 
     this.physics.add.collider(this.player.getSprite(), this.ground);
   }
@@ -174,45 +172,11 @@ export default class GameScene extends BaseScene {
 
     this.layoutGround();
     this.levelManager.resize();
-  }
-
-  private createPlayerUI() {
-    this.scoreText = this.add.text(20, 20, '', {
-      fontSize: '24px',
-      color: '#dcdcdc',
-      fontFamily: 'Arial'
-    })
-      .setScrollFactor(0)
-      .setDepth(UI_DEPTH);
-
-    this.hearts = [];
-
-    for (let i = 0; i < config.player.maxHealth; i++) {
-      this.hearts.push(
-        this.add.text(20 + i * HEART_SPACING, 70, '❤️', { fontSize: '32px' })
-          .setAlpha(0.6)
-          .setScrollFactor(0)
-          .setDepth(UI_DEPTH)
-      );
-    }
-
-    this.lastScore = -1;
-    this.lastHealth = -1;
-    this.updateUI();
+    this.hud.layout();
   }
 
   private updateUI() {
-    const score = this.gameManager.getScore();
-    const health = this.player.getHealth();
-
-    if (score !== this.lastScore) {
-      this.lastScore = score;
-      this.scoreText.setText(`Mollusks: ${score}/${this.levelConfig.mollusks.count}`);
-    }
-
-    if (health !== this.lastHealth) {
-      this.lastHealth = health;
-      this.hearts.forEach((heart, index) => heart.setVisible(index < health));
-    }
+    this.hud.setMollusks(this.gameManager.getScore(), this.levelConfig.mollusks.count);
+    this.hud.setHealth(this.player.getHealth());
   }
 }
