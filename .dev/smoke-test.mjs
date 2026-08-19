@@ -30,7 +30,10 @@ page.on('console', message => {
     notes.push(`console.${type}: ${message.text()}`);
   }
 });
-page.on('pageerror', error => problems.push(`pageerror: ${error.message}`));
+page.on('pageerror', error => {
+  console.log(`     pageerror: ${error.message}`);
+  problems.push(`pageerror: ${error.message}`);
+});
 
 await page.goto(URL, { waitUntil: 'load' });
 
@@ -217,33 +220,62 @@ const movingPings = await page.evaluate(() =>
 await page.keyboard.up('ArrowLeft');
 report('swimming emits noise pings', movingPings > 0, `${movingPings} active pings`);
 
+const beforeLunge = await levelState();
+report('player survived the exploration phase', beforeLunge?.alive === true,
+  beforeLunge ? `health ${beforeLunge.health}, scene ${beforeLunge.key}` : 'no level scene');
+
 const lunge = await page.evaluate(async () => {
   const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
   const enemy = scene.gameManager.enemies[0];
   const playerSprite = scene.player.getSprite();
   const states = [];
 
+  if (!playerSprite.body) {
+    return {
+      error: 'player sprite was destroyed',
+      scenes: window.game.scene.getScenes(true).map(s => s.scene.key),
+      status: scene.sys.settings.status,
+      alive: scene.player.isAlive(),
+      health: scene.player.getHealth(),
+      state: scene.gameManager.state,
+    };
+  }
+
+  // Pin the player so its slow sinking cannot drift it out of the lunge range, and make it
+  // invulnerable so repeated strikes do not end the run before the later checks.
+  scene.player.setInvulnerable(true);
+  playerSprite.body.setAllowGravity(false);
+  playerSprite.setVelocity(0, 0);
+
   enemy.getSprite().setPosition(playerSprite.x + 90, playerSprite.y);
   enemy.postX = playerSprite.x + 90;
   enemy.postY = playerSprite.y;
 
   for (let i = 0; i < 60; i++) {
+    // The damage cooldown clears the flag, so keep re-arming it for the whole probe.
+    scene.player.setInvulnerable(true);
     scene.gameManager.getNoiseField().emit(playerSprite.x, playerSprite.y, 1);
     states.push(enemy.state);
     await new Promise(resolve => setTimeout(resolve, 60));
   }
 
-  return { states: [...new Set(states)].sort(), damaged: scene.player.getHealth() };
+  enemy.getSprite().setPosition(playerSprite.x + 900, playerSprite.y);
+  playerSprite.body.setAllowGravity(true);
+  scene.player.setHealth(3);
+  scene.player.setInvulnerable(false);
+
+  return { states: [...new Set(states)].sort() };
 });
-report('angler telegraphs and lunges when the player comes close', lunge.states.includes(2),
-  `states seen: ${lunge.states.join(',')}`);
+report('angler telegraphs and lunges when the player comes close', lunge.states?.includes(2) === true,
+  lunge.error ? JSON.stringify(lunge) : `states seen: ${lunge.states.join(',')}`);
 
 await page.setViewportSize({ width: 800, height: 900 });
 await wait(600);
 await page.setViewportSize({ width: 1200, height: 700 });
 await wait(600);
 const afterResize = await levelState();
-report('survives resize', afterResize.alive && afterResize.fps > 0, `fps ${afterResize.fps}`);
+report('survives resize', afterResize?.alive === true,
+  afterResize ? `fps ${afterResize.fps}` : `level gone, scenes: ${(await activeScenes()).join(', ')}`);
 
 await page.keyboard.press('Escape');
 await wait(600);
@@ -253,7 +285,13 @@ report('pause opens PauseScene', paused.includes('PauseScene'), paused.join(', '
 await page.keyboard.press('Escape');
 await wait(800);
 
-const completedLevel = (await levelState()).key;
+const completedLevel = (await levelState())?.key;
+
+if (!completedLevel) {
+  console.log('\nlevel scene is gone, skipping completion checks');
+  await browser.close();
+  process.exit(problems.length ? 1 : 0);
+}
 
 await page.evaluate(() => {
   const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
@@ -280,6 +318,66 @@ try {
 } catch {
   nextScenes = await activeScenes();
   report('level completion transitions forward', false, `stuck on ${nextScenes.join(', ')}`);
+}
+
+if (nextScenes.some(key => key.startsWith('Level'))) {
+  await wait(2000);
+
+  const nextLevel = await levelState();
+  report('next level runs', Boolean(nextLevel), nextLevel
+    ? `${nextLevel.key}, enemies ${nextLevel.enemies}, mollusks ${nextLevel.mollusks}`
+    : 'no level');
+
+  const kinds = await page.evaluate(() => {
+    const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
+    const counts = {};
+
+    scene.gameManager.enemies.forEach(enemy => {
+      const name = enemy.constructor.name;
+      counts[name] = (counts[name] ?? 0) + 1;
+    });
+
+    return counts;
+  });
+  report('level mixes enemy kinds', Object.keys(kinds).length > 1, JSON.stringify(kinds));
+
+  const blind = await page.evaluate(() => {
+    const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
+    const enemy = scene.gameManager.enemies.find(e => e.constructor.name === 'SwallowtailFish');
+
+    if (!enemy) return null;
+
+    const playerSprite = scene.player.getSprite();
+    const noise = scene.gameManager.getNoiseField();
+
+    enemy.getSprite().setPosition(playerSprite.x + 200, playerSprite.y);
+    noise.reset();
+
+    const context = {
+      playerX: playerSprite.x,
+      playerY: playerSprite.y,
+      isPlayerAlive: true,
+      playerLightRadius: 500,
+      noise,
+    };
+
+    const inBrightLight = enemy.sensePlayer(context);
+
+    noise.emit(playerSprite.x, playerSprite.y, 1);
+
+    return { inBrightLight, afterNoise: enemy.sensePlayer(context) };
+  });
+
+  if (blind) {
+    report('swallowtail ignores the player light', blind.inBrightLight === 0,
+      `level ${blind.inBrightLight.toFixed(2)}`);
+    report('swallowtail reacts to noise', blind.afterNoise > 0.35,
+      `level ${blind.afterNoise.toFixed(2)}`);
+  } else {
+    report('swallowtail present on the level', false, 'not spawned');
+  }
+
+  await page.screenshot({ path: process.env.SMOKE_SHOT ?? '/tmp/adlight-level.png' });
 }
 
 const final = await page.evaluate(() => ({

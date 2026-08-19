@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-export type EnemyKind = 'anglerFish';
+export type EnemyKind = 'anglerFish' | 'swallowtail';
 
 export interface SpawnIndent {
   top?: number,
@@ -99,6 +99,21 @@ export const config = {
       hitArea: { width: 40, height: 40, offsetX: 40, offsetY: 30 },
       bubbles: { minDelay: 3000, maxDelay: 9000, maxCount: 1 },
     },
+    swallowtail: {
+      patrolSpeed: 90,
+      patrolTurnMs: { min: 3000, max: 6000 },
+      patrolWobble: 18,
+      patrolWobbleMs: 2600,
+      telegraphMs: 450,
+      shakeMs: 110,
+      dashSpeed: 520,
+      dashDurationMs: 400,
+      cooldownMs: 1800,
+      senses: { hearRadius: 380, hearingFactor: 1, sightFactor: 0 },
+      bodySize: { width: 110, height: 50 },
+      hitArea: { width: 60, height: 50, offsetX: 45, offsetY: 0 },
+      bubbles: { minDelay: 4000, maxDelay: 12000, maxCount: 1 },
+    },
   },
   mollusk: {
     lightRadius: 100,
@@ -131,6 +146,7 @@ export const config = {
       },
       enemies: [
         { kind: 'anglerFish', count: 7 },
+        { kind: 'swallowtail', count: 4 },
       ],
       mollusks: {
         count: 15,

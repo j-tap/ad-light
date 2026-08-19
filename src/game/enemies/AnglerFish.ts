@@ -81,7 +81,7 @@ export class AnglerFish extends BaseEnemy {
     ));
 
     this.driftAroundPost(delta);
-    this.sprite.setFlipX(this.body.velocity.x < 0);
+    this.faceVelocity();
 
     if (context.isPlayerAlive && this.isAlerted(context)) {
       this.enter(AnglerState.Alert);
@@ -118,7 +118,7 @@ export class AnglerFish extends BaseEnemy {
 
     if (this.distanceTo(this.postX, this.postY) > settings.postDriftRadius) {
       this.moveTowards(this.postX, this.postY, settings.returnSpeed);
-      this.sprite.setFlipX(this.body.velocity.x < 0);
+      this.faceVelocity();
     }
 
     if (this.stateTime >= settings.lungeCooldownMs) {

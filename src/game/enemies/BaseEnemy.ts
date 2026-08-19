@@ -36,6 +36,8 @@ export interface BaseEnemyConfig {
   texture: string,
   senses: EnemySenses,
   animation?: string,
+  /** Set when the artwork looks left, so facing and attachment offsets stay in sync. */
+  facesLeft?: boolean,
   drag?: number,
   bounce?: number,
   bodySize?: { width: number, height: number },
@@ -51,6 +53,7 @@ export abstract class BaseEnemy {
   protected readonly scene: Phaser.Scene;
   protected readonly sprite: Phaser.Physics.Arcade.Sprite;
   protected readonly senses: EnemySenses;
+  private readonly facesLeft: boolean;
   /** Where the player was last noticed: enemies commit to this, not to the live position. */
   protected sensedX = 0;
   protected sensedY = 0;
@@ -65,6 +68,7 @@ export abstract class BaseEnemy {
   constructor(scene: Phaser.Scene, x: number, y: number, config: BaseEnemyConfig) {
     this.scene = scene;
     this.senses = config.senses;
+    this.facesLeft = config.facesLeft === true;
     this.sprite = this.createSprite(x, y, config);
 
     if (config.light) {
@@ -206,8 +210,22 @@ export abstract class BaseEnemy {
     const distanceX = x - this.sprite.x;
 
     if (Math.abs(distanceX) > minDistance) {
-      this.sprite.setFlipX(distanceX < 0);
+      this.setFacing(distanceX);
     }
+  }
+
+  protected faceVelocity() {
+    if (this.body.velocity.x !== 0) {
+      this.setFacing(this.body.velocity.x);
+    }
+  }
+
+  protected isFacingLeft() {
+    return this.facesLeft !== this.sprite.flipX;
+  }
+
+  private setFacing(directionX: number) {
+    this.sprite.setFlipX(this.facesLeft ? directionX > 0 : directionX < 0);
   }
 
   protected moveTowards(x: number, y: number, speed: number) {
@@ -259,7 +277,7 @@ export abstract class BaseEnemy {
   }
 
   private updateAttachments() {
-    const flipSign = this.sprite.flipX ? -1 : 1;
+    const flipSign = this.isFacingLeft() ? -1 : 1;
 
     if (this.hitArea && this.hitAreaConfig) {
       this.hitArea.setPosition(
