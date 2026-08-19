@@ -133,8 +133,12 @@ export class GameManager {
     const playerSprite = player.getSprite();
 
     this.scene.physics.add.overlap(playerSprite, this.mouthsGroup, (_player, mouth) => {
+      const enemy = this.enemyByObject.get(mouth as Phaser.GameObjects.GameObject);
+
+      if (!enemy?.canDamage()) return;
+
       this.damagePlayer();
-      this.enemyByObject.get(mouth as Phaser.GameObjects.GameObject)?.onPlayerHit();
+      enemy.onPlayerHit();
     });
 
     this.scene.physics.add.overlap(playerSprite, this.mollusksGroup, this.collectMollusk, undefined, this);

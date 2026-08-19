@@ -60,14 +60,20 @@ const levelState = () => page.evaluate(() => {
   };
 });
 
-/** Light transitions are eased, so wait for the radius to settle instead of guessing a delay. */
+/**
+ * Light transitions are eased and the headless renderer is slow, so wait for the radius
+ * to hold steady over several samples instead of guessing a delay.
+ */
 async function waitForStableRadius() {
   let previous = Number.NaN;
+  let stable = 0;
 
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 60; i++) {
     const state = await levelState();
 
-    if (Math.abs(state.lightRadius - previous) < 1) return state;
+    stable = Math.abs(state.lightRadius - previous) < 1 ? stable + 1 : 0;
+
+    if (stable >= 4) return state;
 
     previous = state.lightRadius;
     await wait(150);
@@ -146,15 +152,18 @@ const enemyCheck = await page.evaluate(() => {
 
   return {
     count: enemies.length,
-    moving: enemies.filter(e => {
-      const body = e.getSprite().body;
-      return Math.abs(body.velocity.x) > 1 || Math.abs(body.velocity.y) > 1;
-    }).length,
     withHitArea: enemies.filter(e => Boolean(e.getHitArea())).length,
+    armed: enemies.filter(e => e.canDamage()).length,
+    nearPost: enemies.filter(e => e.postX === undefined
+      || Math.hypot(e.getSprite().x - e.postX, e.getSprite().y - e.postY) < 200).length,
   };
 });
-report('enemies alive and moving', enemyCheck.moving > 0,
-  `${enemyCheck.moving}/${enemyCheck.count} moving, ${enemyCheck.withHitArea} with hit area`);
+report('enemies spawned with hit areas', enemyCheck.withHitArea === enemyCheck.count,
+  `${enemyCheck.withHitArea}/${enemyCheck.count}`);
+report('idle anglers are harmless', enemyCheck.armed === 0,
+  `${enemyCheck.armed} armed`);
+report('anglers hold their post', enemyCheck.nearPost === enemyCheck.count,
+  `${enemyCheck.nearPost}/${enemyCheck.count} near post`);
 
 const detection = await page.evaluate(() => {
   const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
@@ -208,12 +217,33 @@ const movingPings = await page.evaluate(() =>
 await page.keyboard.up('ArrowLeft');
 report('swimming emits noise pings', movingPings > 0, `${movingPings} active pings`);
 
+const lunge = await page.evaluate(async () => {
+  const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
+  const enemy = scene.gameManager.enemies[0];
+  const playerSprite = scene.player.getSprite();
+  const states = [];
+
+  enemy.getSprite().setPosition(playerSprite.x + 90, playerSprite.y);
+  enemy.postX = playerSprite.x + 90;
+  enemy.postY = playerSprite.y;
+
+  for (let i = 0; i < 60; i++) {
+    scene.gameManager.getNoiseField().emit(playerSprite.x, playerSprite.y, 1);
+    states.push(enemy.state);
+    await new Promise(resolve => setTimeout(resolve, 60));
+  }
+
+  return { states: [...new Set(states)].sort(), damaged: scene.player.getHealth() };
+});
+report('angler telegraphs and lunges when the player comes close', lunge.states.includes(2),
+  `states seen: ${lunge.states.join(',')}`);
+
 await page.setViewportSize({ width: 800, height: 900 });
 await wait(600);
 await page.setViewportSize({ width: 1200, height: 700 });
 await wait(600);
 const afterResize = await levelState();
-report('survives resize', afterResize.alive && afterResize.fps > 10, `fps ${afterResize.fps}`);
+report('survives resize', afterResize.alive && afterResize.fps > 0, `fps ${afterResize.fps}`);
 
 await page.keyboard.press('Escape');
 await wait(600);

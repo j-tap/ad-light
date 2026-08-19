@@ -3,16 +3,28 @@ import { BaseEnemy, EnemyContext } from './BaseEnemy';
 import { config } from '../../config';
 
 enum AnglerState {
-  Idle,
-  Chase,
+  Lure,
+  Alert,
+  Lunge,
+  Recover,
 }
 
 const settings = config.enemy.anglerFish;
+const TAU = Math.PI * 2;
 
+/**
+ * An ambush predator: it holds its post and uses the glowing lure to make the player
+ * come close, then strikes once. Its mouth only hurts during the strike, so the light
+ * itself is bait rather than a threat.
+ */
 export class AnglerFish extends BaseEnemy {
-  private readonly idleTimer: Phaser.Time.TimerEvent;
-  private state = AnglerState.Idle;
-  private canAttack = true;
+  private readonly postX: number;
+  private readonly postY: number;
+  private state = AnglerState.Lure;
+  private stateTime = 0;
+  private driftTime = 0;
+  private driftDelay = 0;
+  private lurePulse = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, {
@@ -26,71 +38,123 @@ export class AnglerFish extends BaseEnemy {
       bubbles: settings.bubbles,
     });
 
-    this.applyIdleVelocity();
+    this.postX = x;
+    this.postY = y;
+    this.driftDelay = this.nextDriftDelay();
 
-    this.idleTimer = this.addTimer({
-      delay: Phaser.Math.Between(settings.idleChangeMs.min, settings.idleChangeMs.max),
-      loop: true,
-      callback: () => {
-        if (this.state !== AnglerState.Idle) return;
-        this.applyIdleVelocity();
-      },
-    });
+    this.setDamaging(false);
   }
 
   onPlayerHit() {
-    if (!this.canAttack) return;
+    if (this.state !== AnglerState.Lunge) return;
 
-    this.canAttack = false;
     this.sprite.setFrame(settings.biteFrame);
-
     this.delay(settings.biteFrameMs, () => this.sprite.anims.play('enemy-swim'));
-    this.delay(settings.attackCooldownMs, () => { this.canAttack = true; });
+    this.enter(AnglerState.Recover);
   }
 
-  protected think(_delta: number, context: EnemyContext) {
-    if (context.isPlayerAlive && this.canAttack) {
-      this.chasePlayer(context);
-    }
+  protected think(delta: number, context: EnemyContext) {
+    this.stateTime += delta;
 
+    switch (this.state) {
+      case AnglerState.Lure:
+        this.lure(delta, context);
+        break;
+      case AnglerState.Alert:
+        this.alert(context);
+        break;
+      case AnglerState.Lunge:
+        this.lunge();
+        break;
+      case AnglerState.Recover:
+        this.recover();
+        break;
+    }
+  }
+
+  private lure(delta: number, context: EnemyContext) {
+    this.lurePulse += (delta / settings.lureIntervalMs) * TAU;
+    this.setLightIntensity(Phaser.Math.Linear(
+      settings.lureIntensityMin,
+      settings.lureIntensityMax,
+      (Math.sin(this.lurePulse) + 1) / 2
+    ));
+
+    this.driftAroundPost(delta);
     this.sprite.setFlipX(this.body.velocity.x < 0);
 
-    if (this.state === AnglerState.Idle && this.isNearlyStill()) {
-      this.applyIdleVelocity();
+    if (context.isPlayerAlive && this.isAlerted(context)) {
+      this.enter(AnglerState.Alert);
     }
   }
 
-  private chasePlayer(context: EnemyContext) {
-    if (!this.isAlerted(context)) {
-      this.setState(AnglerState.Idle);
+  private alert(context: EnemyContext) {
+    this.body.setVelocity(0, 0);
+    this.setLightIntensity(settings.alertIntensity);
+    this.faceTowards(this.sensedX, 0);
+
+    if (this.stateTime < settings.telegraphMs) return;
+
+    const inRange = this.distanceTo(context.playerX, context.playerY) <= settings.lungeRange;
+
+    this.enter(inRange ? AnglerState.Lunge : AnglerState.Recover);
+
+    if (inRange) {
+      this.sensedX = context.playerX;
+      this.sensedY = context.playerY;
+      this.moveTowards(this.sensedX, this.sensedY, settings.lungeSpeed);
+      this.faceTowards(this.sensedX, 0);
+    }
+  }
+
+  private lunge() {
+    if (this.stateTime >= settings.lungeDurationMs) {
+      this.enter(AnglerState.Recover);
+    }
+  }
+
+  private recover() {
+    this.setLightIntensity(settings.recoverIntensity);
+
+    if (this.distanceTo(this.postX, this.postY) > settings.postDriftRadius) {
+      this.moveTowards(this.postX, this.postY, settings.returnSpeed);
+      this.sprite.setFlipX(this.body.velocity.x < 0);
+    }
+
+    if (this.stateTime >= settings.lungeCooldownMs) {
+      this.enter(AnglerState.Lure);
+    }
+  }
+
+  private driftAroundPost(delta: number) {
+    if (this.distanceTo(this.postX, this.postY) > settings.postDriftRadius) {
+      this.moveTowards(this.postX, this.postY, settings.driftSpeed);
       return;
     }
 
-    this.setState(AnglerState.Chase);
-    this.moveTowards(this.sensedX, this.sensedY, settings.speed);
-    this.faceTowards(this.sensedX);
-  }
+    this.driftTime += delta;
 
-  private setState(state: AnglerState) {
-    if (this.state === state) return;
+    if (this.driftTime < this.driftDelay) return;
 
-    this.state = state;
-    this.idleTimer.paused = state === AnglerState.Chase;
-  }
-
-  private isNearlyStill() {
-    const { velocity } = this.body;
-    const threshold = settings.idleSpeedThreshold;
-
-    return Math.abs(velocity.x) < threshold && Math.abs(velocity.y) < threshold;
-  }
-
-  private applyIdleVelocity() {
-    const { idleSpeed } = settings;
-
+    this.driftTime = 0;
+    this.driftDelay = this.nextDriftDelay();
     this.body.setVelocity(
-      Phaser.Math.Between(-idleSpeed, idleSpeed),
-      Phaser.Math.Between(-idleSpeed, idleSpeed)
+      Phaser.Math.Between(-settings.driftSpeed, settings.driftSpeed),
+      Phaser.Math.Between(-settings.driftSpeed, settings.driftSpeed)
     );
+  }
+
+  private enter(state: AnglerState) {
+    this.state = state;
+    this.stateTime = 0;
+    this.setDamaging(state === AnglerState.Lunge);
+
+    if (state !== AnglerState.Lunge) {
+      this.body.setVelocity(0, 0);
+    }
+  }
+
+  private nextDriftDelay() {
+    return Phaser.Math.Between(settings.driftIntervalMs.min, settings.driftIntervalMs.max);
   }
 }

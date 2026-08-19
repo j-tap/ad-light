@@ -54,6 +54,7 @@ export abstract class BaseEnemy {
   /** Where the player was last noticed: enemies commit to this, not to the live position. */
   protected sensedX = 0;
   protected sensedY = 0;
+  private damaging = true;
   private readonly light?: Phaser.GameObjects.Light;
   private readonly lightConfig?: EnemyLightConfig;
   private readonly hitArea?: Phaser.GameObjects.Rectangle;
@@ -104,6 +105,11 @@ export abstract class BaseEnemy {
     if (body.blocked.up || body.blocked.down) {
       body.setVelocityY(-body.velocity.y);
     }
+  }
+
+  /** Physics groups re-enable bodies on add, so a plain flag decides who can bite. */
+  canDamage() {
+    return this.damaging;
   }
 
   onPlayerHit() {}
@@ -182,12 +188,8 @@ export abstract class BaseEnemy {
     });
   }
 
-  protected setHitAreaEnabled(enabled: boolean) {
-    const body = this.hitArea?.body as Phaser.Physics.Arcade.Body | undefined;
-
-    if (body) {
-      body.enable = enabled;
-    }
+  protected setDamaging(damaging: boolean) {
+    this.damaging = damaging;
   }
 
   protected setLightIntensity(intensity: number) {

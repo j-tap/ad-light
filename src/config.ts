@@ -78,11 +78,20 @@ export const config = {
   },
   enemy: {
     anglerFish: {
-      speed: 100,
-      idleSpeed: 40,
-      idleSpeedThreshold: 5,
-      idleChangeMs: { min: 5000, max: 15000 },
-      attackCooldownMs: 1000,
+      postDriftRadius: 40,
+      driftSpeed: 22,
+      driftIntervalMs: { min: 2000, max: 4500 },
+      lureIntervalMs: 2000,
+      lureIntensityMin: 2.5,
+      lureIntensityMax: 5,
+      alertIntensity: 7,
+      recoverIntensity: 1.2,
+      telegraphMs: 400,
+      lungeRange: 150,
+      lungeSpeed: 420,
+      lungeDurationMs: 350,
+      lungeCooldownMs: 2500,
+      returnSpeed: 60,
       biteFrame: 3,
       biteFrameMs: 250,
       senses: { hearRadius: 260, hearingFactor: 0.7, sightFactor: 1 },
@@ -105,7 +114,7 @@ export const config = {
         foreground: 'level1Fg',
       },
       enemies: [
-        { kind: 'anglerFish', count: 8 },
+        { kind: 'anglerFish', count: 6 },
       ],
       mollusks: {
         count: 7,
@@ -121,7 +130,7 @@ export const config = {
         foreground: 'level2Fg',
       },
       enemies: [
-        { kind: 'anglerFish', count: 12 },
+        { kind: 'anglerFish', count: 7 },
       ],
       mollusks: {
         count: 15,
