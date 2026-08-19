@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import BaseScene from './BaseScene';
 import { GUI } from '../ui/Gui';
 import { BubbleEmitter } from '../game/BubbleEmitter';
+import { formatTime, progressStore } from '../game/ProgressStore';
 
 const CREDITS_DELAY = 3600;
 
@@ -9,6 +10,7 @@ export default class WinScene extends BaseScene {
   private gui!: GUI;
   private background!: Phaser.GameObjects.Image;
   private title!: Phaser.GameObjects.Text;
+  private timeText!: Phaser.GameObjects.Text;
   private music!: Phaser.Sound.BaseSound;
 
   constructor() {
@@ -50,8 +52,20 @@ export default class WinScene extends BaseScene {
       .setOrigin(0.5)
       .setScrollFactor(0);
 
+    const run = progressStore.finishRun();
+    const best = run.bestTotalMs ?? run.totalMs;
+    const record = run.isRecord && run.totalMs > 0 ? '  New record' : '';
+
+    this.timeText = this.add.text(0, 0, `Time ${formatTime(run.totalMs)}  Best ${formatTime(best)}${record}`, {
+      fontSize: '22px',
+      color: '#c5d8e6',
+      fontFamily: 'Arial',
+    })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
     this.tweens.add({
-      targets: this.title,
+      targets: [this.title, this.timeText],
       alpha: { from: 0, to: 1 },
       duration: 500,
       ease: 'Sine.easeInOut'
@@ -61,5 +75,6 @@ export default class WinScene extends BaseScene {
   private layout() {
     this.gui.resizeFullscreenBackground(this.background);
     this.title.setPosition(this.centerX, this.centerY / 3);
+    this.timeText.setPosition(this.centerX, this.title.y + 64);
   }
 }

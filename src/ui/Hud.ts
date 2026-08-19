@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { config } from '../config';
+import { formatTime } from '../game/ProgressStore';
 
 const DEPTH = 100;
 const MARGIN = 20;
@@ -12,6 +13,7 @@ const LIGHT_BAR_STEP = 0.01;
 const LIGHT_COLOR_FULL = 0xcff1ff;
 const LIGHT_COLOR_LOW = 0xff6a4a;
 const HINT_BOTTOM_MARGIN = 70;
+const TIMER_TOP = 24;
 
 export class Hud {
   private readonly scene: Phaser.Scene;
@@ -20,11 +22,14 @@ export class Hud {
   private readonly lightFrame: Phaser.GameObjects.Rectangle;
   private readonly lightFill: Phaser.GameObjects.Rectangle;
   private readonly hintText: Phaser.GameObjects.Text;
+  private readonly timerText: Phaser.GameObjects.Text;
+  private readonly resultText: Phaser.GameObjects.Text;
   private lightBlinkTween?: Phaser.Tweens.Tween;
   private lastCollected = -1;
   private lastTotal = -1;
   private lastHealth = -1;
   private lastLightRatio = -1;
+  private lastTimerLabel = '';
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -56,6 +61,24 @@ export class Hud {
         align: 'center',
       })
       .setOrigin(0.5, 1)
+      .setAlpha(0);
+
+    this.timerText = this.scene.add
+      .text(0, 0, '0:00.0', {
+        fontSize: '22px',
+        color: '#dcdcdc',
+        fontFamily: 'Arial',
+      })
+      .setOrigin(1, 0);
+
+    this.resultText = this.scene.add
+      .text(0, 0, '', {
+        fontSize: '22px',
+        color: '#e8f4ff',
+        fontFamily: 'Arial',
+        align: 'center',
+      })
+      .setOrigin(0.5)
       .setAlpha(0);
 
     this.getElements().forEach(element => {
@@ -106,6 +129,29 @@ export class Hud {
       this.scene.scale.width / 2,
       this.scene.scale.height - HINT_BOTTOM_MARGIN
     );
+    this.timerText.setPosition(this.scene.scale.width - MARGIN, TIMER_TOP);
+    this.resultText.setPosition(this.scene.scale.width / 2, this.scene.scale.height / 2);
+  }
+
+  setTime(ms: number) {
+    const label = formatTime(ms);
+
+    if (label === this.lastTimerLabel) return;
+
+    this.lastTimerLabel = label;
+    this.timerText.setText(label);
+  }
+
+  showResult(text: string) {
+    this.resultText.setText(text);
+    this.scene.tweens.killTweensOf(this.resultText);
+    this.resultText.setAlpha(0);
+    this.scene.tweens.add({
+      targets: this.resultText,
+      alpha: 1,
+      duration: config.tutorial.fadeMs,
+      ease: 'Quad.easeOut',
+    });
   }
 
   private isLowRatio(ratio: number) {
@@ -161,6 +207,14 @@ export class Hud {
   }
 
   getElements(): Array<Phaser.GameObjects.Text | Phaser.GameObjects.Rectangle> {
-    return [this.molluskText, ...this.hearts, this.lightFrame, this.lightFill, this.hintText];
+    return [
+      this.molluskText,
+      ...this.hearts,
+      this.lightFrame,
+      this.lightFill,
+      this.hintText,
+      this.timerText,
+      this.resultText,
+    ];
   }
 }

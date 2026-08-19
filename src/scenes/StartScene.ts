@@ -4,6 +4,7 @@ import BaseScene from './BaseScene';
 import { BubbleEmitter } from '../game/BubbleEmitter';
 import { GUI } from '../ui/Gui';
 import { VERSION } from '../config';
+import { progressStore } from '../game/ProgressStore';
 
 export default class StartScene extends BaseScene {
   private gui!: GUI;
@@ -66,6 +67,7 @@ export default class StartScene extends BaseScene {
   }
 
   private playGame() {
+    progressStore.beginRun();
     this.fadeToScene('Level1Scene');
   }
 }

@@ -7,9 +7,9 @@ import { CameraDirector } from '../game/systems/CameraDirector';
 import { TutorialDirector } from '../game/systems/TutorialDirector';
 import { Hud } from '../ui/Hud';
 import { config, isVerticalLevel, levelWorldSize, nextLevelScene, LevelConfig } from '../config';
+import { formatTime, progressStore } from '../game/ProgressStore';
 
 const DEATH_DELAY = 2500;
-const WIN_DELAY = 500;
 
 export default class GameScene extends BaseScene {
   protected readonly cameraBackgroundColor = '#000000';
@@ -211,11 +211,12 @@ export default class GameScene extends BaseScene {
       this.currentMusic?.pause();
       this.tutorial?.hide();
     });
-    this.onSceneEvent('player-damaged', () => this.cameraDirector.onDamage());
-    this.onSceneEvent('player-died', () => this.handlePlayerDied());
-    this.onSceneEvent('player-win', () => {
-      this.time.delayedCall(WIN_DELAY, () => this.fadeToScene(nextLevelScene(this.scene.key)));
+    this.onSceneEvent('player-damaged', () => {
+      this.gameManager.noteDamage();
+      this.cameraDirector.onDamage();
     });
+    this.onSceneEvent('player-died', () => this.handlePlayerDied());
+    this.onSceneEvent('player-win', () => this.handlePlayerWin());
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.currentMusic?.destroy();
@@ -312,5 +313,31 @@ export default class GameScene extends BaseScene {
     this.hud.setMollusks(this.gameManager.getScore(), this.levelConfig.mollusks.count);
     this.hud.setHealth(this.player.getHealth());
     this.hud.setLight(this.player.getLightRatio());
+    this.hud.setTime(this.gameManager.getElapsed());
+  }
+
+  private handlePlayerWin() {
+    const result = progressStore.finishLevel(
+      this.scene.key,
+      this.gameManager.getElapsed(),
+      !this.gameManager.wasDamaged()
+    );
+    const next = nextLevelScene(this.scene.key);
+
+    if (next === 'WinScene') {
+      progressStore.finishRun();
+    }
+
+    const lines = [
+      result.isRecord ? `New record ${formatTime(result.timeMs)}` : formatTime(result.timeMs),
+      `Best ${formatTime(result.bestTimeMs)}`,
+    ];
+
+    if (result.noDamage) {
+      lines.push('No damage');
+    }
+
+    this.hud.showResult(lines.join('\n'));
+    this.time.delayedCall(config.records.resultToastMs, () => this.fadeToScene(next));
   }
 }

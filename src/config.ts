@@ -224,6 +224,11 @@ export const config = {
       tiltRad: 0.12,
     },
   },
+  records: {
+    timerUpdateMs: 100,
+    resultToastMs: 1600,
+    storageKey: 'ad-light:progress:v1',
+  },
   levels: {
     1: {
       width: 5000,

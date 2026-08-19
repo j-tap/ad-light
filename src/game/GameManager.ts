@@ -43,6 +43,8 @@ export class GameManager {
   private mollusks: Mollusk[] = [];
   private score = 0;
   private threat = 0;
+  private elapsedMs = 0;
+  private damaged = false;
   private player!: Player;
   private lastLevel = '';
 
@@ -89,6 +91,8 @@ export class GameManager {
 
   startGame(level: LevelConfig) {
     this.score = 0;
+    this.elapsedMs = 0;
+    this.damaged = false;
     this.noiseField.reset();
     this.player.setInvulnerable(false);
 
@@ -135,12 +139,26 @@ export class GameManager {
     return this.score;
   }
 
+  getElapsed() {
+    return this.elapsedMs;
+  }
+
+  wasDamaged() {
+    return this.damaged;
+  }
+
+  noteDamage() {
+    this.damaged = true;
+  }
+
   isPlaying(): boolean {
     return this.state === GameState.Playing;
   }
 
   update(delta: number) {
     if (!this.isPlaying()) return;
+
+    this.elapsedMs += delta;
 
     const playerSprite = this.player.getSprite();
 
