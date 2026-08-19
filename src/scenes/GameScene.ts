@@ -3,6 +3,7 @@ import BaseScene from './BaseScene';
 import { Player } from '../game/Player';
 import { LevelManager } from '../game/LevelManager';
 import { GameManager } from '../game/GameManager';
+import { CameraDirector } from '../game/systems/CameraDirector';
 import { Hud } from '../ui/Hud';
 import { config, LevelConfig } from '../config';
 
@@ -18,6 +19,8 @@ export default class GameScene extends BaseScene {
   protected player!: Player;
   protected ground!: Phaser.Physics.Arcade.StaticGroup;
   protected hud!: Hud;
+  protected cameraDirector!: CameraDirector;
+  private uiCamera!: Phaser.Cameras.Scene2D.Camera;
   private groundBody?: Phaser.Physics.Arcade.Sprite;
   private currentMusic?: Phaser.Sound.BaseSound;
   private currentTrackIndex = 0;
@@ -42,6 +45,7 @@ export default class GameScene extends BaseScene {
 
     this.hud = new Hud(this);
     this.updateUI();
+    this.createUiCamera();
 
     this.physics.add.collider(this.player.getSprite(), this.ground);
   }
@@ -53,6 +57,7 @@ export default class GameScene extends BaseScene {
     if (!this.gameManager.isPlaying()) return;
 
     this.player.update(time, delta);
+    this.cameraDirector.update(delta, this.gameManager.getThreat());
     this.updateUI();
   }
 
@@ -67,6 +72,7 @@ export default class GameScene extends BaseScene {
 
     this.player = new Player(this, this.gameManager.getNoiseField());
     this.createCamera();
+    this.cameraDirector = new CameraDirector(this);
 
     this.gameManager.setPlayer(this.player);
     this.gameManager.startGame(this.levelConfig);
@@ -82,6 +88,28 @@ export default class GameScene extends BaseScene {
     camera.setRoundPixels(false);
     camera.setDeadzone(0, 150);
     camera.setBackgroundColor(this.cameraBackgroundColor);
+  }
+
+  /**
+   * The chase zoom scales everything the main camera draws, so the interface gets its own
+   * camera. World objects are kept out of it as they appear, including the ones spawned later.
+   */
+  private createUiCamera() {
+    const uiObjects: Phaser.GameObjects.GameObject[] = [
+      ...this.hud.getElements(),
+      this.cameraDirector.getOverlay(),
+    ];
+
+    this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height, false, 'ui');
+
+    this.cameras.main.ignore(uiObjects);
+    this.uiCamera.ignore(this.children.list.filter(child => !uiObjects.includes(child)));
+
+    this.onSceneEvent(Phaser.Scenes.Events.ADDED_TO_SCENE, (object: Phaser.GameObjects.GameObject) => {
+      if (!uiObjects.includes(object)) {
+        this.uiCamera.ignore(object);
+      }
+    });
   }
 
   private createGround() {
@@ -144,6 +172,7 @@ export default class GameScene extends BaseScene {
     });
 
     this.onSceneEvent(Phaser.Scenes.Events.PAUSE, () => this.currentMusic?.pause());
+    this.onSceneEvent('player-damaged', () => this.cameraDirector.onDamage());
     this.onSceneEvent('player-died', () => this.handlePlayerDied());
     this.onSceneEvent('player-win', () => {
       this.time.delayedCall(WIN_DELAY, () => this.fadeToScene(this.levelConfig.nextScene));
@@ -173,6 +202,8 @@ export default class GameScene extends BaseScene {
     this.layoutGround();
     this.levelManager.resize();
     this.hud.layout();
+    this.cameraDirector.layout();
+    this.uiCamera.setSize(this.scale.width, this.scale.height);
   }
 
   private updateUI() {

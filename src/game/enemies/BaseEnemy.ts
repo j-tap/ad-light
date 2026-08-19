@@ -118,6 +118,11 @@ export abstract class BaseEnemy {
     return this.damaging;
   }
 
+  /** True while the enemy is committed to an attack, which is what drives the camera. */
+  isHunting() {
+    return false;
+  }
+
   onPlayerHit() {}
 
   destroy() {

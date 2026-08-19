@@ -45,6 +45,10 @@ export class AnglerFish extends BaseEnemy {
     this.setDamaging(false);
   }
 
+  isHunting() {
+    return this.state === AnglerState.Alert || this.state === AnglerState.Lunge;
+  }
+
   onPlayerHit() {
     if (this.state !== AnglerState.Lunge) return;
 

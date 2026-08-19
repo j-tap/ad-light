@@ -43,6 +43,10 @@ export class SwallowtailFish extends BaseEnemy {
     this.setDamaging(false);
   }
 
+  isHunting() {
+    return this.state === SwallowtailState.Telegraph || this.state === SwallowtailState.Dash;
+  }
+
   onPlayerHit() {
     if (this.state !== SwallowtailState.Dash) return;
 

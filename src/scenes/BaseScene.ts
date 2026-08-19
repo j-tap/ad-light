@@ -39,8 +39,10 @@ export default class BaseScene extends Phaser.Scene {
     if (this.isTransitioning) return;
     this.isTransitioning = true;
 
-    this.cameras.main.resetFX();
-    this.cameras.main.fadeOut(this.fadeDuration, 10, 17, 25);
+    this.cameras.cameras.forEach(camera => {
+      camera.resetFX();
+      camera.fadeOut(this.fadeDuration, 10, 17, 25);
+    });
 
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       callback?.();
@@ -49,7 +51,7 @@ export default class BaseScene extends Phaser.Scene {
   }
 
   protected fadeIn() {
-    this.cameras.main.fadeIn(this.fadeDuration, 10, 17, 25);
+    this.cameras.cameras.forEach(camera => camera.fadeIn(this.fadeDuration, 10, 17, 25));
   }
 
   /** Scene-scoped listener that is detached on shutdown to survive scene restarts. */

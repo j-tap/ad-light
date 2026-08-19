@@ -350,11 +350,14 @@ const lunge = await page.evaluate(async () => {
   enemy.postX = playerSprite.x + 90;
   enemy.postY = playerSprite.y;
 
+  const zooms = [];
+
   for (let i = 0; i < 60; i++) {
     // The damage cooldown clears the flag, so keep re-arming it for the whole probe.
     scene.player.setInvulnerable(true);
     scene.gameManager.getNoiseField().emit(playerSprite.x, playerSprite.y, 1);
     states.push(enemy.state);
+    zooms.push(scene.cameras.main.zoom);
     await new Promise(resolve => setTimeout(resolve, 60));
   }
 
@@ -363,10 +366,40 @@ const lunge = await page.evaluate(async () => {
   scene.player.setHealth(3);
   scene.player.setInvulnerable(false);
 
-  return { states: [...new Set(states)].sort() };
+  return {
+    states: [...new Set(states)].sort(),
+    maxZoom: Math.max(...zooms),
+    uiZoom: scene.uiCamera.zoom,
+  };
 });
 report('angler telegraphs and lunges when the player comes close', lunge.states?.includes(2) === true,
   lunge.error ? JSON.stringify(lunge) : `states seen: ${lunge.states.join(',')}`);
+report('camera pushes in during a chase', lunge.maxZoom > 1.01,
+  `zoom reached ${lunge.maxZoom?.toFixed(3)}`);
+report('interface keeps its own scale', lunge.uiZoom === 1, `ui zoom ${lunge.uiZoom}`);
+
+const damageFx = await page.evaluate(async () => {
+  const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
+  const overlay = scene.cameraDirector.getOverlay();
+
+  scene.player.setHealth(3);
+  scene.player.setInvulnerable(false);
+  scene.player.takeDamage(1);
+
+  // Both effects start synchronously and are short, so read them before the next frame.
+  const flashed = overlay.alpha;
+  const shaking = scene.cameras.main.shakeEffect.isRunning;
+
+  await new Promise(resolve => setTimeout(resolve, 1200));
+
+  scene.player.setHealth(3);
+
+  return { flashed, shaking, faded: overlay.alpha };
+});
+
+report('damage flashes the screen', damageFx.flashed > 0.05 && damageFx.faded < 0.05,
+  `alpha ${damageFx.flashed.toFixed(2)} -> ${damageFx.faded.toFixed(2)}`);
+report('damage shakes the camera', damageFx.shaking === true);
 
 await page.setViewportSize({ width: 800, height: 900 });
 await wait(600);

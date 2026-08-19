@@ -42,6 +42,7 @@ export class GameManager {
   private enemies: BaseEnemy[] = [];
   private mollusks: Mollusk[] = [];
   private score = 0;
+  private threat = 0;
   private player!: Player;
   private lastLevel = '';
 
@@ -59,6 +60,11 @@ export class GameManager {
 
   getNoiseField() {
     return this.noiseField;
+  }
+
+  /** 0 when nothing hunts the player, 1 when a hunter is right on top of them. */
+  getThreat() {
+    return this.threat;
   }
 
   setPlayer(player: Player) {
@@ -128,6 +134,7 @@ export class GameManager {
 
     this.enemies.forEach(enemy => enemy.update(delta, context));
     this.mollusks.forEach(mollusk => mollusk.update(delta, playerSprite.x, playerSprite.y));
+    this.threat = this.measureThreat(playerSprite.x, playerSprite.y);
 
     if (this.mollusks.length === 0) {
       this.winGame();
@@ -290,6 +297,19 @@ export class GameManager {
     }
 
     return best;
+  }
+
+  private measureThreat(playerX: number, playerY: number) {
+    const { threatRadius } = config.camera;
+
+    return this.enemies.reduce((threat, enemy) => {
+      if (!enemy.isHunting()) return threat;
+
+      const sprite = enemy.getSprite();
+      const distance = Phaser.Math.Distance.Between(sprite.x, sprite.y, playerX, playerY);
+
+      return Math.max(threat, 1 - Math.min(distance / threatRadius, 1));
+    }, 0);
   }
 
   private addMollusk(x: number, y: number) {

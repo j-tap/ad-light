@@ -46,7 +46,7 @@ export class Hud {
       .rectangle(0, 0, LIGHT_BAR_WIDTH, LIGHT_BAR_HEIGHT, LIGHT_COLOR_FULL)
       .setOrigin(0, 0.5);
 
-    this.elements().forEach(element => {
+    this.getElements().forEach(element => {
       element.setScrollFactor(0);
       element.setDepth(DEPTH);
     });
@@ -125,7 +125,7 @@ export class Hud {
     });
   }
 
-  private elements(): Array<Phaser.GameObjects.Text | Phaser.GameObjects.Rectangle> {
+  getElements(): Array<Phaser.GameObjects.Text | Phaser.GameObjects.Rectangle> {
     return [this.molluskText, ...this.hearts, this.lightFrame, this.lightFill];
   }
 }

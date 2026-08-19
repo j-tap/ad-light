@@ -130,6 +130,7 @@ export class Player {
 
     this.setHealth(this.health - amount);
     this.noiseField.emit(this.sprite.x, this.sprite.y, 1);
+    this.scene.events.emit('player-damaged');
 
     if (this.health <= 0) {
       this.scene.time.delayedCall(0, () => this.die());
