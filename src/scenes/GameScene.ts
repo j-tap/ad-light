@@ -50,7 +50,7 @@ export default class GameScene extends BaseScene {
 
   update(time: number, delta: number) {
     this.levelManager.update();
-    this.gameManager.update();
+    this.gameManager.update(delta);
 
     if (!this.gameManager.isPlaying()) return;
 

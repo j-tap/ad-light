@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
-import { Enemy } from './Enemy';
+import { BaseEnemy } from './enemies/BaseEnemy';
+import { AnglerFish } from './enemies/AnglerFish';
 import { Mollusk } from './Mollusk';
 import { Player } from './Player';
-import type { MolluskConfig, EnemiesConfig, LevelConfig } from '../config';
+import type { MolluskConfig, EnemyKind, EnemySpawnConfig, SpawnIndent, LevelConfig } from '../config';
 
 export enum GameState {
   Start,
@@ -12,18 +13,26 @@ export enum GameState {
   Lose
 }
 
+type EnemyConstructor = new (scene: Phaser.Scene, x: number, y: number) => BaseEnemy;
+
+const enemyConstructors: Record<EnemyKind, EnemyConstructor> = {
+  anglerFish: AnglerFish,
+};
+
 const SPAWN_MIN_DISTANCE_TO_PLAYER = 300;
 const SPAWN_MAX_TRIES = 20;
+const ENEMY_SPAWN_PADDING_TOP = 50;
+const ENEMY_SPAWN_PADDING_BOTTOM = 100;
 
 export class GameManager {
   private readonly scene: Phaser.Scene;
   private readonly enemiesGroup: Phaser.Physics.Arcade.Group;
   private readonly mollusksGroup: Phaser.Physics.Arcade.Group;
   private readonly mouthsGroup: Phaser.Physics.Arcade.Group;
-  private readonly enemyByObject = new WeakMap<Phaser.GameObjects.GameObject, Enemy>();
+  private readonly enemyByObject = new WeakMap<Phaser.GameObjects.GameObject, BaseEnemy>();
   private readonly molluskBySprite = new WeakMap<Phaser.GameObjects.GameObject, Mollusk>();
   private state: GameState = GameState.Start;
-  private enemies: Enemy[] = [];
+  private enemies: BaseEnemy[] = [];
   private mollusks: Mollusk[] = [];
   private score = 0;
   private player!: Player;
@@ -90,13 +99,17 @@ export class GameManager {
     return this.state === GameState.Playing;
   }
 
-  update() {
+  update(delta: number) {
     if (!this.isPlaying()) return;
 
     const playerSprite = this.player.getSprite();
-    const isPlayerAlive = this.player.isAlive();
+    const context = {
+      playerX: playerSprite.x,
+      playerY: playerSprite.y,
+      isPlayerAlive: this.player.isAlive(),
+    };
 
-    this.enemies.forEach(enemy => enemy.update(playerSprite.x, playerSprite.y, isPlayerAlive));
+    this.enemies.forEach(enemy => enemy.update(delta, context));
 
     if (this.mollusks.length === 0) {
       this.winGame();
@@ -143,34 +156,50 @@ export class GameManager {
     this.player.takeDamage(1);
   }
 
-  private spawnEnemies(enemies: EnemiesConfig) {
-    const { width, height } = this.scene.physics.world.bounds;
+  private spawnEnemies(spawns: EnemySpawnConfig[]) {
+    spawns.forEach(spawn => {
+      const EnemyClass = enemyConstructors[spawn.kind];
+
+      for (let i = 0; i < spawn.count; i++) {
+        const { x, y } = this.findEnemySpawnPoint(spawn.indent);
+        const enemy = new EnemyClass(this.scene, x, y);
+        const sprite = enemy.getSprite();
+        const hitArea = enemy.getHitArea();
+
+        this.enemies.push(enemy);
+        this.enemiesGroup.add(sprite);
+        this.enemyByObject.set(sprite, enemy);
+
+        if (hitArea) {
+          this.mouthsGroup.add(hitArea);
+          this.enemyByObject.set(hitArea, enemy);
+        }
+      }
+    });
+  }
+
+  private findEnemySpawnPoint(indent?: SpawnIndent) {
+    const bounds = this.scene.physics.world.bounds;
     const { x: playerX, y: playerY } = this.player.getSprite();
+    const left = bounds.left + (indent?.left ?? 0);
+    const right = bounds.right - (indent?.right ?? 0);
+    const top = bounds.top + ENEMY_SPAWN_PADDING_TOP + (indent?.top ?? 0);
+    const bottom = bounds.bottom - ENEMY_SPAWN_PADDING_BOTTOM - (indent?.bottom ?? 0);
 
-    for (let i = 0; i < enemies.count; i++) {
-      let x: number;
-      let y: number;
-      let tries = 0;
+    let x = 0;
+    let y = 0;
+    let tries = 0;
 
-      do {
-        x = Phaser.Math.Between(0, width);
-        y = Phaser.Math.Between(50, height - 100);
-        tries++;
-      } while (
-        Phaser.Math.Distance.Between(x, y, playerX, playerY) < SPAWN_MIN_DISTANCE_TO_PLAYER &&
-        tries < SPAWN_MAX_TRIES
-      );
+    do {
+      x = Phaser.Math.Between(left, right);
+      y = Phaser.Math.Between(top, bottom);
+      tries++;
+    } while (
+      Phaser.Math.Distance.Between(x, y, playerX, playerY) < SPAWN_MIN_DISTANCE_TO_PLAYER &&
+      tries < SPAWN_MAX_TRIES
+    );
 
-      const enemy = new Enemy(this.scene, x, y);
-      const sprite = enemy.getSprite();
-      const mouth = enemy.getMouthCollider();
-
-      this.enemies.push(enemy);
-      this.enemiesGroup.add(sprite);
-      this.mouthsGroup.add(mouth);
-      this.enemyByObject.set(sprite, enemy);
-      this.enemyByObject.set(mouth, enemy);
-    }
+    return { x, y };
   }
 
   private spawnMollusks(mollusks: MolluskConfig) {

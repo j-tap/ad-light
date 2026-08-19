@@ -1,17 +1,23 @@
 import Phaser from 'phaser';
 
-export interface EnemiesConfig {
+export type EnemyKind = 'anglerFish';
+
+export interface SpawnIndent {
+  top?: number,
+  bottom?: number,
+  left?: number,
+  right?: number,
+}
+
+export interface EnemySpawnConfig {
+  kind: EnemyKind,
   count: number,
+  indent?: SpawnIndent,
 }
 
 export interface MolluskConfig {
   count: number,
-  indent?: {
-    top?: number,
-    bottom?: number,
-    left?: number,
-    right?: number,
-  },
+  indent?: SpawnIndent,
 }
 
 export interface LevelTextures {
@@ -25,7 +31,7 @@ export interface LevelConfig {
   nextScene: string,
   music: string[],
   textures: LevelTextures,
-  enemies: EnemiesConfig,
+  enemies: EnemySpawnConfig[],
   mollusks: MolluskConfig,
   plankton?: boolean,
 }
@@ -46,9 +52,17 @@ export const config = {
   enemy: {
     anglerFish: {
       speed: 100,
-      lightRadius: 46,
       distanceVision: 300,
-    }
+      idleSpeed: 40,
+      idleSpeedThreshold: 5,
+      idleChangeMs: { min: 5000, max: 15000 },
+      attackCooldownMs: 1000,
+      biteFrame: 3,
+      biteFrameMs: 250,
+      light: { radius: 46, color: 0xf0ff5e, intensity: 4, offsetX: 50, offsetY: -20 },
+      hitArea: { width: 40, height: 40, offsetX: 40, offsetY: 30 },
+      bubbles: { minDelay: 3000, maxDelay: 9000, maxCount: 1 },
+    },
   },
   mollusk: {
     lightRadius: 100,
@@ -63,9 +77,9 @@ export const config = {
         background: 'level1Bg',
         foreground: 'level1Fg',
       },
-      enemies: {
-        count: 8,
-      },
+      enemies: [
+        { kind: 'anglerFish', count: 8 },
+      ],
       mollusks: {
         count: 7,
       },
@@ -79,9 +93,9 @@ export const config = {
         background: 'level2Bg',
         foreground: 'level2Fg',
       },
-      enemies: {
-        count: 12,
-      },
+      enemies: [
+        { kind: 'anglerFish', count: 12 },
+      ],
       mollusks: {
         count: 15,
       },
@@ -96,9 +110,7 @@ export const config = {
         background: 'level3Bg',
         foreground: 'level3Fg',
       },
-      enemies: {
-        count: 0,
-      },
+      enemies: [],
       mollusks: {
         count: 18,
         indent: {
