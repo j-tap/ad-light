@@ -41,6 +41,27 @@ export interface CurrentZone {
   forceX: number,
 }
 
+export type RockSide = 'top' | 'bottom' | 'left' | 'right';
+
+export interface RockObstacleDef {
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  side: RockSide,
+}
+
+export interface RockSettings {
+  edgeColor: number,
+  bodyColor: number,
+  edgeWidth: number,
+  particleCount: number,
+  particleColor: number,
+  hitShakeDuration: number,
+  hitShakeIntensity: number,
+  molluskDeadZone: number,
+}
+
 export interface LevelConfig {
   width: number,
   height?: number,
@@ -55,6 +76,7 @@ export interface LevelConfig {
   depthEffects?: DepthEffects,
   currentZones?: CurrentZone[],
   finaleHeight?: number,
+  rocks?: RockObstacleDef[],
 }
 
 export const VERSION = __APP_VERSION__;
@@ -224,6 +246,16 @@ export const config = {
       tiltRad: 0.12,
     },
   },
+  rock: {
+    edgeColor: 0x8899aa,
+    bodyColor: 0x1a2030,
+    edgeWidth: 3,
+    particleCount: 12,
+    particleColor: 0x667788,
+    hitShakeDuration: 180,
+    hitShakeIntensity: 4,
+    molluskDeadZone: 250,
+  } as RockSettings,
   records: {
     timerUpdateMs: 100,
     resultToastMs: 1600,
@@ -281,7 +313,17 @@ export const config = {
           bottom: 230,
           left: 800,
         },
-      }
+      },
+      rocks: [
+        { x: 2200, y: 0, width: 320, height: 200, side: 'top' },
+        { x: 3500, y: 0, width: 400, height: 260, side: 'bottom' },
+        { x: 5000, y: 0, width: 350, height: 220, side: 'top' },
+        { x: 6200, y: 0, width: 280, height: 180, side: 'bottom' },
+        { x: 7800, y: 0, width: 360, height: 240, side: 'top' },
+        { x: 9000, y: 0, width: 300, height: 200, side: 'bottom' },
+        { x: 10200, y: 0, width: 380, height: 250, side: 'top' },
+        { x: 11200, y: 0, width: 320, height: 210, side: 'bottom' },
+      ],
     },
     4: {
       width: 1600,
@@ -305,12 +347,11 @@ export const config = {
       textures: {
         backgroundFar: 'level3BgFar',
         background: 'depthGradient',
-        foreground: 'level3Fg',
+        foreground: 'emptyTexture',
       },
       enemies: [
-        { kind: 'jellyfish', count: 4, indent: { top: 400, right: 980, bottom: 400 } },
-        { kind: 'jellyfish', count: 4, indent: { top: 400, left: 980, bottom: 400 } },
-        { kind: 'swallowtail', count: 5, indent: { top: 800, left: 280, right: 280, bottom: 500 } },
+        { kind: 'jellyfish', count: 6, indent: { top: 400, bottom: 400 } },
+        { kind: 'swallowtail', count: 3, indent: { top: 800, bottom: 500 } },
       ],
       mollusks: {
         count: 16,
@@ -319,6 +360,43 @@ export const config = {
           bottom: 180,
         },
       },
+      rocks: [
+        // --- Section 1 (y 800–1800): passage shifts right ---
+        { x: 0, y: 800, width: 700, height: 280, side: 'left' },
+        { x: 0, y: 1300, width: 850, height: 300, side: 'left' },
+        { x: 0, y: 1100, width: 300, height: 200, side: 'right' },
+
+        // --- Section 2 (y 2000–3200): passage shifts left ---
+        { x: 0, y: 2000, width: 350, height: 260, side: 'right' },
+        { x: 0, y: 2500, width: 800, height: 320, side: 'right' },
+        { x: 0, y: 2200, width: 280, height: 200, side: 'left' },
+        // Dead-end niche on right
+        { x: 0, y: 2900, width: 500, height: 240, side: 'right' },
+
+        // --- Section 3 (y 3400–4400): narrow center ---
+        { x: 0, y: 3400, width: 550, height: 300, side: 'left' },
+        { x: 0, y: 3500, width: 500, height: 280, side: 'right' },
+        { x: 0, y: 3900, width: 650, height: 260, side: 'left' },
+        { x: 0, y: 4000, width: 600, height: 250, side: 'right' },
+
+        // --- Section 4 (y 4600–5600): wide-then-tight, passage right ---
+        { x: 0, y: 4600, width: 900, height: 350, side: 'left' },
+        { x: 0, y: 5000, width: 950, height: 300, side: 'left' },
+        { x: 0, y: 4800, width: 250, height: 200, side: 'right' },
+
+        // --- Section 5 (y 5800–6800): passage left ---
+        { x: 0, y: 5800, width: 300, height: 250, side: 'left' },
+        { x: 0, y: 5900, width: 850, height: 320, side: 'right' },
+        { x: 0, y: 6400, width: 900, height: 280, side: 'right' },
+        // Dead-end niche on left
+        { x: 0, y: 6200, width: 500, height: 220, side: 'left' },
+
+        // --- Section 6 (y 7000–7800): final squeeze ---
+        { x: 0, y: 7000, width: 600, height: 300, side: 'left' },
+        { x: 0, y: 7000, width: 550, height: 280, side: 'right' },
+        { x: 0, y: 7400, width: 700, height: 260, side: 'left' },
+        { x: 0, y: 7500, width: 650, height: 250, side: 'right' },
+      ],
     }
   } as Record<number, LevelConfig>,
 }

@@ -33,3 +33,12 @@ export function ensureDepthGradient(scene: Phaser.Scene) {
   });
 }
 
+export const EMPTY_TEXTURE = 'emptyTexture';
+
+export function ensureEmptyTexture(scene: Phaser.Scene) {
+  return ensureTexture(scene, EMPTY_TEXTURE, 4, 4, graphics => {
+    graphics.fillStyle(0x000000, 0);
+    graphics.fillRect(0, 0, 4, 4);
+  });
+}
+

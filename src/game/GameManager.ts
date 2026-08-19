@@ -47,6 +47,7 @@ export class GameManager {
   private damaged = false;
   private player!: Player;
   private lastLevel = '';
+  private rockDeadZones: Phaser.Geom.Rectangle[] = [];
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -89,10 +90,11 @@ export class GameManager {
     this.player = player;
   }
 
-  startGame(level: LevelConfig) {
+  startGame(level: LevelConfig, rockDeadZones: Phaser.Geom.Rectangle[] = []) {
     this.score = 0;
     this.elapsedMs = 0;
     this.damaged = false;
+    this.rockDeadZones = rockDeadZones;
     this.noiseField.reset();
     this.player.setInvulnerable(false);
 
@@ -330,10 +332,21 @@ export class GameManager {
   private molluskArea(indent?: SpawnIndent) {
     const bounds = this.scene.physics.world.bounds;
     const { padding } = config.mollusk.nest;
+    const viewW = this.scene.scale.width;
+    const worldW = bounds.width;
+
+    let left = bounds.left + padding + (indent?.left ?? 0);
+    let right = bounds.right - padding - (indent?.right ?? 0);
+
+    if (worldW > viewW) {
+      const margin = (worldW - viewW) / 2 + padding;
+      left = Math.max(left, bounds.left + margin);
+      right = Math.min(right, bounds.right - margin);
+    }
 
     return {
-      left: bounds.left + padding + (indent?.left ?? 0),
-      right: bounds.right - padding - (indent?.right ?? 0),
+      left,
+      right,
       top: bounds.top + padding + (indent?.top ?? 0),
       bottom: bounds.bottom - padding - (indent?.bottom ?? 0),
     };
@@ -352,6 +365,9 @@ export class GameManager {
         x: Phaser.Math.Between(area.left, area.right),
         y: Phaser.Math.Between(area.top, area.bottom),
       };
+
+      if (this.isInsideDeadZone(candidate.x, candidate.y)) continue;
+
       const distance = taken.reduce(
         (closest, point) => Math.min(closest, Phaser.Math.Distance.BetweenPoints(candidate, point)),
         Number.POSITIVE_INFINITY
@@ -366,6 +382,10 @@ export class GameManager {
     }
 
     return best;
+  }
+
+  private isInsideDeadZone(x: number, y: number): boolean {
+    return this.rockDeadZones.some(zone => zone.contains(x, y));
   }
 
   private measureThreat(playerX: number, playerY: number) {

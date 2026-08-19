@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { CurrentZone, LevelTextures } from '../config';
-import { DEPTH_GRADIENT, ensureDepthGradient } from './textures';
+import { DEPTH_GRADIENT, EMPTY_TEXTURE, ensureDepthGradient, ensureEmptyTexture } from './textures';
 
 interface LevelCreateConfig {
   textures: LevelTextures,
@@ -37,6 +37,10 @@ export class LevelManager {
     if (textures.background === DEPTH_GRADIENT || textures.backgroundFar === DEPTH_GRADIENT) {
       ensureDepthGradient(this.scene);
     }
+
+    [textures.foreground, textures.background, textures.backgroundFar].forEach(key => {
+      if (key === EMPTY_TEXTURE) ensureEmptyTexture(this.scene);
+    });
 
     this.createLayer(textures.backgroundFar, 0.2, true).sprite.postFX.addBlur(1);
     this.createLayer(textures.background, 1, false);

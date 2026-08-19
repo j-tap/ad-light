@@ -6,6 +6,7 @@ import { GameManager } from '../game/GameManager';
 import { CameraDirector } from '../game/systems/CameraDirector';
 import { TutorialDirector } from '../game/systems/TutorialDirector';
 import { Hud } from '../ui/Hud';
+import { RockObstacle } from '../game/RockObstacle';
 import { config, isVerticalLevel, levelWorldSize, nextLevelScene, LevelConfig } from '../config';
 import { formatTime, progressStore } from '../game/ProgressStore';
 
@@ -24,6 +25,7 @@ export default class GameScene extends BaseScene {
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
   private tutorial?: TutorialDirector;
   private groundBody?: Phaser.Physics.Arcade.Sprite;
+  private rocks: RockObstacle[] = [];
   private currentMusic?: Phaser.Sound.BaseSound;
   private currentTrackIndex = 0;
   private lastDepthProgress = -1;
@@ -55,6 +57,11 @@ export default class GameScene extends BaseScene {
     }
 
     this.physics.add.collider(this.player.getSprite(), this.ground);
+    this.rocks.forEach(rock => {
+      this.physics.add.collider(this.player.getSprite(), rock.getSprite(), () => {
+        rock.onPlayerCollision();
+      });
+    });
   }
 
   update(time: number, delta: number) {
@@ -90,9 +97,25 @@ export default class GameScene extends BaseScene {
     this.createCamera();
     this.cameraDirector = new CameraDirector(this);
 
+    this.createRocks();
+
     this.gameManager.setPlayer(this.player);
-    this.gameManager.startGame(this.levelConfig);
+    this.gameManager.startGame(this.levelConfig, this.getRockDeadZones());
     this.gameManager.setupCollisions(this.player);
+  }
+
+  private createRocks() {
+    const defs = this.levelConfig.rocks;
+
+    if (!defs?.length) return;
+
+    const { width, height } = this.worldSize();
+
+    this.rocks = defs.map(def => new RockObstacle(this, def, width, height));
+  }
+
+  private getRockDeadZones(): Phaser.Geom.Rectangle[] {
+    return this.rocks.map(r => r.getDeadZone());
   }
 
   private worldSize() {
