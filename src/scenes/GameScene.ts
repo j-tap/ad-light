@@ -6,7 +6,7 @@ import { GameManager } from '../game/GameManager';
 import { CameraDirector } from '../game/systems/CameraDirector';
 import { TutorialDirector } from '../game/systems/TutorialDirector';
 import { Hud } from '../ui/Hud';
-import { config, isVerticalLevel, levelWorldSize, LevelConfig } from '../config';
+import { config, isVerticalLevel, levelWorldSize, nextLevelScene, LevelConfig } from '../config';
 
 const DEATH_DELAY = 2500;
 const WIN_DELAY = 500;
@@ -214,7 +214,7 @@ export default class GameScene extends BaseScene {
     this.onSceneEvent('player-damaged', () => this.cameraDirector.onDamage());
     this.onSceneEvent('player-died', () => this.handlePlayerDied());
     this.onSceneEvent('player-win', () => {
-      this.time.delayedCall(WIN_DELAY, () => this.fadeToScene(this.levelConfig.nextScene));
+      this.time.delayedCall(WIN_DELAY, () => this.fadeToScene(nextLevelScene(this.scene.key)));
     });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -273,10 +273,31 @@ export default class GameScene extends BaseScene {
     if (Math.abs(progress - this.lastDepthProgress) < config.world.depthUpdateStep) return;
 
     this.lastDepthProgress = progress;
-    this.lights.setAmbientColor(this.lerpColor(effects.ambientFrom, effects.ambientTo, progress));
-    this.player.setLightDrainMultiplier(
-      Phaser.Math.Linear(effects.lightDrainFrom, effects.lightDrainTo, progress)
-    );
+
+    const finale = this.levelConfig.finaleHeight;
+    let ambientFrom = effects.ambientFrom;
+    let ambientTo = effects.ambientTo;
+    let drainFrom = effects.lightDrainFrom;
+    let drainTo = effects.lightDrainTo;
+
+    if (finale) {
+      const { height } = this.worldSize();
+      const finaleStart = 1 - finale / height;
+
+      if (progress >= finaleStart) {
+        const t = (progress - finaleStart) / Math.max(1 - finaleStart, 0.001);
+        ambientFrom = effects.ambientTo;
+        ambientTo = 0x020305;
+        drainFrom = effects.lightDrainTo;
+        drainTo = effects.lightDrainTo + 0.4;
+        this.lights.setAmbientColor(this.lerpColor(ambientFrom, ambientTo, t));
+        this.player.setLightDrainMultiplier(Phaser.Math.Linear(drainFrom, drainTo, t));
+        return;
+      }
+    }
+
+    this.lights.setAmbientColor(this.lerpColor(ambientFrom, ambientTo, progress));
+    this.player.setLightDrainMultiplier(Phaser.Math.Linear(drainFrom, drainTo, progress));
   }
 
   private lerpColor(from: number, to: number, t: number) {

@@ -4,6 +4,8 @@ import Phaser from 'phaser';
  * Textures are shared game-wide, so generated ones are created only on first request
  * and reused by every scene afterwards.
  */
+export const DEPTH_GRADIENT = 'depthGradient';
+
 export function ensureTexture(
   scene: Phaser.Scene,
   key: string,
@@ -23,3 +25,11 @@ export function ensureTexture(
 
   return key;
 }
+
+export function ensureDepthGradient(scene: Phaser.Scene) {
+  return ensureTexture(scene, DEPTH_GRADIENT, 8, 512, graphics => {
+    graphics.fillGradientStyle(0x0a1119, 0x0a1119, 0x02040a, 0x02040a, 1);
+    graphics.fillRect(0, 0, 8, 512);
+  });
+}
+

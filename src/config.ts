@@ -45,7 +45,6 @@ export interface LevelConfig {
   width: number,
   height?: number,
   orientation?: LevelOrientation,
-  nextScene: string,
   music: string[],
   textures: LevelTextures,
   enemies: EnemySpawnConfig[],
@@ -55,9 +54,19 @@ export interface LevelConfig {
   tutorial?: boolean,
   depthEffects?: DepthEffects,
   currentZones?: CurrentZone[],
+  finaleHeight?: number,
 }
 
 export const VERSION = __APP_VERSION__;
+
+export const levelOrder = [1, 2, 3, 4];
+
+export function nextLevelScene(currentKey: string) {
+  const level = Number(/^Level(\d+)Scene$/.exec(currentKey)?.[1]);
+  const next = levelOrder[levelOrder.indexOf(level) + 1];
+
+  return next ? `Level${next}Scene` : 'WinScene';
+}
 
 export function isVerticalLevel(level: LevelConfig) {
   return level.orientation === 'vertical';
@@ -218,7 +227,6 @@ export const config = {
   levels: {
     1: {
       width: 5000,
-      nextScene: 'Level2Scene',
       tutorial: true,
       music: ['gameMusic1'],
       textures: {
@@ -236,7 +244,6 @@ export const config = {
     },
     2: {
       width: 8000,
-      nextScene: 'Level3Scene',
       music: ['gameMusic2'],
       textures: {
         backgroundFar: 'level2BgFar',
@@ -254,7 +261,6 @@ export const config = {
     },
     3: {
       width: 12000,
-      nextScene: 'WinScene',
       music: ['gameMusic3'],
       plankton: false,
       textures: {
@@ -271,6 +277,43 @@ export const config = {
           left: 800,
         },
       }
+    },
+    4: {
+      width: 1600,
+      height: 9000,
+      orientation: 'vertical',
+      music: ['gameMusic2'],
+      plankton: true,
+      finaleHeight: 1400,
+      depthEffects: {
+        ambientFrom: 0x1a2a6c,
+        ambientTo: 0x05070d,
+        lightDrainFrom: 1,
+        lightDrainTo: 1.8,
+      },
+      currentZones: [
+        { y: 1600, height: 700, forceX: 90 },
+        { y: 3400, height: 800, forceX: -100 },
+        { y: 5400, height: 700, forceX: 80 },
+        { y: 7200, height: 650, forceX: -90 },
+      ],
+      textures: {
+        backgroundFar: 'level3BgFar',
+        background: 'depthGradient',
+        foreground: 'level3Fg',
+      },
+      enemies: [
+        { kind: 'jellyfish', count: 4, indent: { top: 400, right: 980, bottom: 400 } },
+        { kind: 'jellyfish', count: 4, indent: { top: 400, left: 980, bottom: 400 } },
+        { kind: 'swallowtail', count: 5, indent: { top: 800, left: 280, right: 280, bottom: 500 } },
+      ],
+      mollusks: {
+        count: 16,
+        indent: {
+          top: 350,
+          bottom: 180,
+        },
+      },
     }
   } as Record<number, LevelConfig>,
 }
@@ -298,7 +341,7 @@ export const phaserConfig: Phaser.Types.Core.GameConfig = {
   },
   render: {
     // A nest plus a couple of anglers already passes the default cap of ten lights.
-    maxLights: 16,
+    maxLights: 24,
     roundPixels: false,
     pixelArt: false,
     antialias: true,
