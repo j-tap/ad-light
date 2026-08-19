@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { BaseEnemy } from './enemies/BaseEnemy';
 import { AnglerFish } from './enemies/AnglerFish';
 import { SwallowtailFish } from './enemies/SwallowtailFish';
+import { Jellyfish } from './enemies/Jellyfish';
 import { Mollusk } from './Mollusk';
 import { NoiseField } from './systems/NoiseField';
 import { Player } from './Player';
@@ -21,6 +22,7 @@ type EnemyConstructor = new (scene: Phaser.Scene, x: number, y: number) => BaseE
 const enemyConstructors: Record<EnemyKind, EnemyConstructor> = {
   anglerFish: AnglerFish,
   swallowtail: SwallowtailFish,
+  jellyfish: Jellyfish,
 };
 
 const SPAWN_MIN_DISTANCE_TO_PLAYER = 300;

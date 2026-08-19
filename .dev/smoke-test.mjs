@@ -152,21 +152,23 @@ report('total darkness damages the player', darkness.after < darkness.before,
 const enemyCheck = await page.evaluate(() => {
   const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
   const enemies = scene.gameManager.enemies;
+  const anglers = enemies.filter(e => e.constructor.name === 'AnglerFish');
 
   return {
     count: enemies.length,
+    anglers: anglers.length,
     withHitArea: enemies.filter(e => Boolean(e.getHitArea())).length,
-    armed: enemies.filter(e => e.canDamage()).length,
-    nearPost: enemies.filter(e => e.postX === undefined
-      || Math.hypot(e.getSprite().x - e.postX, e.getSprite().y - e.postY) < 200).length,
+    armed: anglers.filter(e => e.canDamage()).length,
+    nearPost: anglers.filter(e =>
+      Math.hypot(e.getSprite().x - e.postX, e.getSprite().y - e.postY) < 200).length,
   };
 });
 report('enemies spawned with hit areas', enemyCheck.withHitArea === enemyCheck.count,
   `${enemyCheck.withHitArea}/${enemyCheck.count}`);
 report('idle anglers are harmless', enemyCheck.armed === 0,
-  `${enemyCheck.armed} armed`);
-report('anglers hold their post', enemyCheck.nearPost === enemyCheck.count,
-  `${enemyCheck.nearPost}/${enemyCheck.count} near post`);
+  `${enemyCheck.armed} of ${enemyCheck.anglers} armed`);
+report('anglers hold their post', enemyCheck.nearPost === enemyCheck.anglers,
+  `${enemyCheck.nearPost}/${enemyCheck.anglers} near post`);
 
 const detection = await page.evaluate(() => {
   const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
@@ -219,6 +221,52 @@ const movingPings = await page.evaluate(() =>
 );
 await page.keyboard.up('ArrowLeft');
 report('swimming emits noise pings', movingPings > 0, `${movingPings} active pings`);
+
+const jelly = await page.evaluate(async () => {
+  const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
+  const enemy = scene.gameManager.enemies.find(e => e.constructor.name === 'Jellyfish');
+
+  if (!enemy) return null;
+
+  const playerSprite = scene.player.getSprite();
+  const sprite = enemy.getSprite();
+
+  sprite.setPosition(playerSprite.x + 210, playerSprite.y - 40);
+
+  const samples = [];
+
+  // Let a frame run so the glow catches up with the teleport before sampling.
+  await new Promise(resolve => setTimeout(resolve, 600));
+
+  for (let i = 0; i < 12; i++) {
+    samples.push({ y: sprite.y, scaleY: sprite.scaleY, glowY: enemy.glow.y, alpha: enemy.glow.alpha });
+    await new Promise(resolve => setTimeout(resolve, 120));
+  }
+
+  return {
+    damaging: enemy.canDamage(),
+    unlit: sprite.pipeline?.name !== 'Light2D',
+    drifts: new Set(samples.map(s => Math.round(s.y))).size > 1,
+    pulses: new Set(samples.map(s => Math.round(s.scaleY * 100))).size > 1,
+    // Sampling is not frame synced, so allow the glow to trail by a single slow frame.
+    maxGlowOffset: Math.round(Math.max(...samples.map(s => Math.abs(s.glowY - s.y)))),
+    spriteY: Math.round(sprite.y),
+    worldBottom: Math.round(scene.physics.world.bounds.bottom),
+    glowPulses: new Set(samples.map(s => Math.round(s.alpha * 100))).size > 1,
+  };
+});
+
+if (jelly) {
+  report('jellyfish stings on contact', jelly.damaging === true);
+  report('jellyfish glows on its own', jelly.unlit === true);
+  report('jellyfish drifts and pulses', jelly.drifts && jelly.pulses,
+    `drift ${jelly.drifts}, pulse ${jelly.pulses}`);
+  report('jellyfish glow tracks the body', jelly.maxGlowOffset < 20 && jelly.glowPulses,
+    `offset ${jelly.maxGlowOffset}px, pulse ${jelly.glowPulses}, y ${jelly.spriteY} of ${jelly.worldBottom}`);
+  await page.screenshot({ path: '/tmp/adlight-jellyfish.png' });
+} else {
+  report('jellyfish spawned', false, 'not found on the level');
+}
 
 const beforeLunge = await levelState();
 report('player survived the exploration phase', beforeLunge?.alive === true,

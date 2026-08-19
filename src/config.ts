@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-export type EnemyKind = 'anglerFish' | 'swallowtail';
+export type EnemyKind = 'anglerFish' | 'swallowtail' | 'jellyfish';
 
 export interface SpawnIndent {
   top?: number,
@@ -114,6 +114,23 @@ export const config = {
       hitArea: { width: 60, height: 50, offsetX: 45, offsetY: 0 },
       bubbles: { minDelay: 4000, maxDelay: 12000, maxCount: 1 },
     },
+    jellyfish: {
+      alpha: 0.88,
+      pulseMs: 2600,
+      squash: 0.08,
+      driftRatio: 0.35,
+      driftSpeed: 26,
+      riseSpeed: 34,
+      glowRadius: 60,
+      glowColor: 0xa8f0e0,
+      glowScale: 1,
+      glowPulse: 0.14,
+      glowAlpha: 0.3,
+      glowAlphaPulse: 0.12,
+      senses: { hearRadius: 0, hearingFactor: 0, sightFactor: 0 },
+      bodySize: { width: 60, height: 90 },
+      hitArea: { width: 58, height: 96, offsetX: 0, offsetY: 12 },
+    },
   },
   mollusk: {
     lightRadius: 100,
@@ -130,6 +147,7 @@ export const config = {
       },
       enemies: [
         { kind: 'anglerFish', count: 6 },
+        { kind: 'jellyfish', count: 3, indent: { bottom: 200 } },
       ],
       mollusks: {
         count: 7,
@@ -147,6 +165,7 @@ export const config = {
       enemies: [
         { kind: 'anglerFish', count: 7 },
         { kind: 'swallowtail', count: 4 },
+        { kind: 'jellyfish', count: 6, indent: { bottom: 180 } },
       ],
       mollusks: {
         count: 15,

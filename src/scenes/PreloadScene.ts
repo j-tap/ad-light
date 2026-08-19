@@ -46,6 +46,7 @@ export default class PreloadScene extends BaseScene {
     });
 
     this.load.image('swallowtail', 'assets/images/enemy-swallowtail.png');
+    this.load.image('jellyfish', 'assets/images/enemy-jellyfish.png');
     this.load.image('logo', 'assets/images/logo-title.png');
     this.load.image('menuBg', 'assets/images/bg/menu-bg.png');
     this.load.image('deadBg', 'assets/images/bg/dead-bg.png');

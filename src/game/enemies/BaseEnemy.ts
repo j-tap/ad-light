@@ -38,6 +38,8 @@ export interface BaseEnemyConfig {
   animation?: string,
   /** Set when the artwork looks left, so facing and attachment offsets stay in sync. */
   facesLeft?: boolean,
+  /** Self glowing creatures skip the light pipeline so they stay visible in the dark. */
+  lit?: boolean,
   drag?: number,
   bounce?: number,
   bodySize?: { width: number, height: number },
@@ -90,8 +92,8 @@ export abstract class BaseEnemy {
 
   update(delta: number, context: EnemyContext) {
     this.think(delta, context);
-    this.updateAttachments();
     this.keepInsideBounds();
+    this.updateAttachments();
   }
 
   getSprite() {
@@ -242,8 +244,11 @@ export abstract class BaseEnemy {
     const sprite = this.scene.physics.add.sprite(x, y, config.texture)
       .setCollideWorldBounds(true)
       .setImmovable(false)
-      .setBounce(config.bounce ?? 0)
-      .setPipeline('Light2D');
+      .setBounce(config.bounce ?? 0);
+
+    if (config.lit !== false) {
+      sprite.setPipeline('Light2D');
+    }
 
     if (config.drag !== undefined) {
       sprite.setDamping(true).setDrag(config.drag);
