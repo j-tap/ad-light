@@ -44,9 +44,18 @@ export const config = {
     groundHeight: 45,
     groundOffsetY: 35,
   },
+  noise: {
+    radiusMin: 180,
+    radiusMax: 420,
+    lifetimeMs: 600,
+    maxPings: 8,
+    lightDetectionFactor: 0.9,
+    alertThreshold: 0.35,
+  },
   player: {
     maxHealth: 3,
     speed: 260,
+    movingThreshold: 79,
     light: {
       fuelMax: 100,
       fuelStart: 85,
@@ -70,13 +79,13 @@ export const config = {
   enemy: {
     anglerFish: {
       speed: 100,
-      distanceVision: 300,
       idleSpeed: 40,
       idleSpeedThreshold: 5,
       idleChangeMs: { min: 5000, max: 15000 },
       attackCooldownMs: 1000,
       biteFrame: 3,
       biteFrameMs: 250,
+      senses: { hearRadius: 260, hearingFactor: 0.7, sightFactor: 1 },
       light: { radius: 46, color: 0xf0ff5e, intensity: 4, offsetX: 50, offsetY: -20 },
       hitArea: { width: 40, height: 40, offsetX: 40, offsetY: 30 },
       bubbles: { minDelay: 3000, maxDelay: 9000, maxCount: 1 },

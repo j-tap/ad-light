@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { BaseEnemy } from './enemies/BaseEnemy';
 import { AnglerFish } from './enemies/AnglerFish';
 import { Mollusk } from './Mollusk';
+import { NoiseField } from './systems/NoiseField';
 import { Player } from './Player';
 import { config } from '../config';
 import type { MolluskConfig, EnemyKind, EnemySpawnConfig, SpawnIndent, LevelConfig } from '../config';
@@ -30,6 +31,7 @@ export class GameManager {
   private readonly enemiesGroup: Phaser.Physics.Arcade.Group;
   private readonly mollusksGroup: Phaser.Physics.Arcade.Group;
   private readonly mouthsGroup: Phaser.Physics.Arcade.Group;
+  private readonly noiseField = new NoiseField();
   private readonly enemyByObject = new WeakMap<Phaser.GameObjects.GameObject, BaseEnemy>();
   private readonly molluskBySprite = new WeakMap<Phaser.GameObjects.GameObject, Mollusk>();
   private state: GameState = GameState.Start;
@@ -51,12 +53,17 @@ export class GameManager {
     this.scene.physics.world.on('worldbounds', this.handleWorldBounds, this);
   }
 
+  getNoiseField() {
+    return this.noiseField;
+  }
+
   setPlayer(player: Player) {
     this.player = player;
   }
 
   startGame(level: LevelConfig) {
     this.score = 0;
+    this.noiseField.reset();
     this.player.setInvulnerable(false);
 
     this.spawnEnemies(level.enemies);
@@ -104,10 +111,15 @@ export class GameManager {
     if (!this.isPlaying()) return;
 
     const playerSprite = this.player.getSprite();
+
+    this.noiseField.update(delta);
+
     const context = {
       playerX: playerSprite.x,
       playerY: playerSprite.y,
       isPlayerAlive: this.player.isAlive(),
+      playerLightRadius: this.player.getLightRadius(),
+      noise: this.noiseField,
     };
 
     this.enemies.forEach(enemy => enemy.update(delta, context));

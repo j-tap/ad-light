@@ -1,10 +1,20 @@
 import Phaser from 'phaser';
 import { BubbleEmitter, BubbleEmitterConfig } from '../BubbleEmitter';
+import { NoiseField } from '../systems/NoiseField';
+import { config } from '../../config';
 
 export interface EnemyContext {
   playerX: number,
   playerY: number,
   isPlayerAlive: boolean,
+  playerLightRadius: number,
+  noise: NoiseField,
+}
+
+export interface EnemySenses {
+  hearRadius: number,
+  hearingFactor: number,
+  sightFactor: number,
 }
 
 export interface EnemyLightConfig {
@@ -24,6 +34,7 @@ export interface EnemyHitAreaConfig {
 
 export interface BaseEnemyConfig {
   texture: string,
+  senses: EnemySenses,
   animation?: string,
   drag?: number,
   bounce?: number,
@@ -34,10 +45,15 @@ export interface BaseEnemyConfig {
 }
 
 const BOUNDS_PADDING = 10;
+const { lightDetectionFactor, alertThreshold } = config.noise;
 
 export abstract class BaseEnemy {
   protected readonly scene: Phaser.Scene;
   protected readonly sprite: Phaser.Physics.Arcade.Sprite;
+  protected readonly senses: EnemySenses;
+  /** Where the player was last noticed: enemies commit to this, not to the live position. */
+  protected sensedX = 0;
+  protected sensedY = 0;
   private readonly light?: Phaser.GameObjects.Light;
   private readonly lightConfig?: EnemyLightConfig;
   private readonly hitArea?: Phaser.GameObjects.Rectangle;
@@ -47,6 +63,7 @@ export abstract class BaseEnemy {
 
   constructor(scene: Phaser.Scene, x: number, y: number, config: BaseEnemyConfig) {
     this.scene = scene;
+    this.senses = config.senses;
     this.sprite = this.createSprite(x, y, config);
 
     if (config.light) {
@@ -108,6 +125,45 @@ export abstract class BaseEnemy {
 
   protected get body() {
     return this.sprite.body as Phaser.Physics.Arcade.Body;
+  }
+
+  /**
+   * How strongly the player stands out right now, 0..1. Hearing reacts to movement noise,
+   * sight to the player light, so dimming the light and slowing down both help to hide.
+   */
+  protected sensePlayer(context: EnemyContext) {
+    let level = 0;
+
+    if (this.senses.hearingFactor > 0) {
+      const ping = context.noise.getAudiblePing(this.sprite.x, this.sprite.y, this.senses.hearRadius);
+
+      if (ping) {
+        level = context.noise.getLoudness(ping) * this.senses.hearingFactor;
+        this.sensedX = ping.x;
+        this.sensedY = ping.y;
+      }
+    }
+
+    if (this.senses.sightFactor > 0) {
+      const range = context.playerLightRadius * lightDetectionFactor;
+      const distance = this.distanceTo(context.playerX, context.playerY);
+
+      if (distance < range) {
+        const visibility = (1 - distance / range) * this.senses.sightFactor;
+
+        if (visibility > level) {
+          level = visibility;
+          this.sensedX = context.playerX;
+          this.sensedY = context.playerY;
+        }
+      }
+    }
+
+    return level;
+  }
+
+  protected isAlerted(context: EnemyContext) {
+    return this.sensePlayer(context) > alertThreshold;
   }
 
   /** Timers registered here are removed together with the enemy. */

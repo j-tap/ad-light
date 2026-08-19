@@ -20,6 +20,7 @@ export class AnglerFish extends BaseEnemy {
       animation: 'enemy-swim',
       drag: 0.9,
       bounce: 0.5,
+      senses: settings.senses,
       light: settings.light,
       hitArea: settings.hitArea,
       bubbles: settings.bubbles,
@@ -49,7 +50,7 @@ export class AnglerFish extends BaseEnemy {
 
   protected think(_delta: number, context: EnemyContext) {
     if (context.isPlayerAlive && this.canAttack) {
-      this.chasePlayer(context.playerX, context.playerY);
+      this.chasePlayer(context);
     }
 
     this.sprite.setFlipX(this.body.velocity.x < 0);
@@ -59,15 +60,15 @@ export class AnglerFish extends BaseEnemy {
     }
   }
 
-  private chasePlayer(playerX: number, playerY: number) {
-    if (this.distanceTo(playerX, playerY) >= settings.distanceVision) {
+  private chasePlayer(context: EnemyContext) {
+    if (!this.isAlerted(context)) {
       this.setState(AnglerState.Idle);
       return;
     }
 
     this.setState(AnglerState.Chase);
-    this.moveTowards(playerX, playerY, settings.speed);
-    this.faceTowards(playerX);
+    this.moveTowards(this.sensedX, this.sensedY, settings.speed);
+    this.faceTowards(this.sensedX);
   }
 
   private setState(state: AnglerState) {

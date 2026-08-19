@@ -65,7 +65,7 @@ export default class GameScene extends BaseScene {
     this.levelManager.createLevel({ textures, plankton: plankton !== false });
     this.createGround();
 
-    this.player = new Player(this);
+    this.player = new Player(this, this.gameManager.getNoiseField());
     this.createCamera();
 
     this.gameManager.setPlayer(this.player);

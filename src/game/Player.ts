@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { MovementController } from './MovementController';
 import { BubbleEmitter } from './BubbleEmitter';
 import { LightFuel } from './systems/LightFuel';
+import { NoiseField } from './systems/NoiseField';
 import { ensureTexture } from './textures';
 import { config } from '../config';
 
@@ -18,6 +19,7 @@ export class Player {
   private readonly idleDuration: number = 1800;
   private readonly waveInterval: number = 300;
   private readonly scene: Phaser.Scene;
+  private readonly noiseField: NoiseField;
   private readonly sprite: Phaser.Physics.Arcade.Sprite;
   private readonly light: Phaser.GameObjects.Light;
   private readonly lightFuel = new LightFuel();
@@ -34,8 +36,9 @@ export class Player {
   private lightDrainMultiplier = 1;
   private health: number;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, noiseField: NoiseField) {
     this.scene = scene;
+    this.noiseField = noiseField;
     this.health = this.healthMax;
     this.sprite = this.createSprite();
     this.light = this.createLight();
@@ -52,7 +55,7 @@ export class Player {
     this.moveWaveTimer += delta;
 
     const isInputActive = this.movementController.isInputActive();
-    const isMoving = this.isMoving(this.speed / 3.3);
+    const isMoving = this.isMoving(config.player.movingThreshold);
 
     if (isInputActive && !this.wasMovingLastFrame) {
       this.bubbleEmitter.emitBurst();
@@ -126,6 +129,7 @@ export class Player {
     if (!this.alive || this.isInvulnerable) return;
 
     this.setHealth(this.health - amount);
+    this.noiseField.emit(this.sprite.x, this.sprite.y, 1);
 
     if (this.health <= 0) {
       this.scene.time.delayedCall(0, () => this.die());
@@ -159,6 +163,14 @@ export class Player {
     });
 
     this.scene.events.emit('player-died');
+  }
+
+  /** 0 at the noise threshold, 1 at full speed: how loud the current movement is. */
+  private getSpeedRatio() {
+    const { movingThreshold } = config.player;
+    const speed = this.sprite.body?.velocity.length() ?? 0;
+
+    return Phaser.Math.Clamp((speed - movingThreshold) / (this.speed - movingThreshold), 0, 1);
   }
 
   private createSprite() {
@@ -278,6 +290,8 @@ export class Player {
     } else {
       angle = velocity.y > 0 ? 0 : 180;
     }
+
+    this.noiseField.emit(this.sprite.x, this.sprite.y, this.getSpeedRatio());
 
     const wave = this.scene.add.image(this.sprite.x, this.sprite.y, WAVE_TEXTURE)
       .setOrigin(0.5)

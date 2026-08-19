@@ -156,6 +156,58 @@ const enemyCheck = await page.evaluate(() => {
 report('enemies alive and moving', enemyCheck.moving > 0,
   `${enemyCheck.moving}/${enemyCheck.count} moving, ${enemyCheck.withHitArea} with hit area`);
 
+const detection = await page.evaluate(() => {
+  const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
+  const enemy = scene.gameManager.enemies[0];
+  const playerSprite = scene.player.getSprite();
+  const noise = scene.gameManager.getNoiseField();
+
+  enemy.getSprite().setPosition(playerSprite.x + 250, playerSprite.y);
+
+  const dimContext = {
+    playerX: playerSprite.x,
+    playerY: playerSprite.y,
+    isPlayerAlive: true,
+    playerLightRadius: 90,
+    noise,
+  };
+
+  noise.reset();
+  const hiding = enemy.sensePlayer(dimContext);
+
+  noise.emit(playerSprite.x, playerSprite.y, 1);
+  const loud = enemy.sensePlayer(dimContext);
+
+  noise.reset();
+  const litUp = enemy.sensePlayer({ ...dimContext, playerLightRadius: 500 });
+
+  return { hiding, loud, litUp };
+});
+
+report('dim and still player stays unnoticed at 250px', detection.hiding === 0,
+  `level ${detection.hiding.toFixed(2)}`);
+report('loud movement gives the player away', detection.loud > 0.35,
+  `level ${detection.loud.toFixed(2)}`);
+report('bright light gives the player away', detection.litUp > 0.35,
+  `level ${detection.litUp.toFixed(2)}`);
+
+const pings = await page.evaluate(async () => {
+  const scene = window.game.scene.getScenes(true).find(s => s.scene.key.startsWith('Level'));
+  scene.gameManager.getNoiseField().reset();
+  return scene.gameManager.getNoiseField().pings.filter(p => p.active).length;
+});
+report('noise field starts quiet', pings === 0, `${pings} active pings`);
+
+await page.keyboard.down('ArrowLeft');
+await wait(800);
+const movingPings = await page.evaluate(() =>
+  window.game.scene.getScenes(true)
+    .find(s => s.scene.key.startsWith('Level'))
+    .gameManager.getNoiseField().pings.filter(p => p.active).length
+);
+await page.keyboard.up('ArrowLeft');
+report('swimming emits noise pings', movingPings > 0, `${movingPings} active pings`);
+
 await page.setViewportSize({ width: 800, height: 900 });
 await wait(600);
 await page.setViewportSize({ width: 1200, height: 700 });
