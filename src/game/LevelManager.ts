@@ -1,14 +1,14 @@
 import Phaser from 'phaser';
 import type { CurrentZone, LevelTextures } from '../config';
 import { config } from '../config';
-import { DEPTH_GRADIENT, EMPTY_TEXTURE, ensureDepthGradient, ensureEmptyTexture } from './textures';
+import { EMPTY_TEXTURE, ensureEmptyTexture } from './textures';
+import { ensureTrenchBackdrop, TRENCH_BACKDROP } from './art/backdrop';
 
 interface LevelCreateConfig {
   textures: LevelTextures,
   plankton: boolean,
   vertical?: boolean,
   currentZones?: CurrentZone[],
-  foregroundParallax?: number,
 }
 
 interface LevelLayer {
@@ -21,6 +21,7 @@ interface LevelLayer {
 }
 
 const FOREGROUND_DEPTH = config.render.foreground;
+const FOREGROUND_PARALLAX = 3;
 
 export class LevelManager {
   private readonly scene: Phaser.Scene;
@@ -28,25 +29,23 @@ export class LevelManager {
   private vertical = false;
   private planktonEmitter?: Phaser.GameObjects.Particles.ParticleEmitter;
   private planktonZone?: Phaser.Geom.Rectangle;
+  private sparkleEmitter?: Phaser.GameObjects.Particles.ParticleEmitter;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
   }
 
-  createLevel({ textures, plankton, vertical = false, currentZones = [], foregroundParallax = 3 }: LevelCreateConfig) {
+  createLevel({ textures, plankton, vertical = false, currentZones = [] }: LevelCreateConfig) {
     this.vertical = vertical;
-
-    if (textures.background === DEPTH_GRADIENT || textures.backgroundFar === DEPTH_GRADIENT) {
-      ensureDepthGradient(this.scene);
-    }
 
     [textures.foreground, textures.background, textures.backgroundFar].forEach(key => {
       if (key === EMPTY_TEXTURE) ensureEmptyTexture(this.scene);
+      if (key === TRENCH_BACKDROP) ensureTrenchBackdrop(this.scene);
     });
 
     this.createLayer(textures.backgroundFar, 0.2, true).sprite.postFX.addBlur(1);
     this.createLayer(textures.background, 1, false);
-    this.createLayer(textures.foreground, foregroundParallax, true).sprite.setDepth(FOREGROUND_DEPTH);
+    this.createLayer(textures.foreground, FOREGROUND_PARALLAX, true).sprite.setDepth(FOREGROUND_DEPTH);
 
     if (plankton) {
       this.createPlanktonEmitter();
@@ -60,6 +59,7 @@ export class LevelManager {
 
     this.layers.forEach(layer => {
       if (this.vertical) {
+        layer.sprite.tilePositionX = scrollX * layer.parallax;
         layer.sprite.tilePositionY = scrollY * layer.parallax;
       } else {
         layer.sprite.tilePositionX = scrollX * layer.parallax;
@@ -67,6 +67,14 @@ export class LevelManager {
     });
 
     this.planktonEmitter?.setPosition(scrollX, scrollY);
+  }
+
+  /** A short burst of light where a mollusk was eaten. */
+  sparkle(x: number, y: number) {
+    const { count } = config.mollusk.sparkle;
+
+    this.sparkleEmitter ??= this.createSparkleEmitter();
+    this.sparkleEmitter.explode(count, x, y);
   }
 
   resize() {
@@ -134,20 +142,37 @@ export class LevelManager {
     this.planktonEmitter.setPipeline('Light2D');
   }
 
+  private createSparkleEmitter() {
+    const { speed, lifespanMs, tint, scale } = config.mollusk.sparkle;
+
+    return this.scene.add.particles(0, 0, 'planktonParticle', {
+      lifespan: lifespanMs,
+      speed: { min: speed * 0.3, max: speed },
+      scale: { start: scale, end: 0 },
+      alpha: { start: 0.9, end: 0 },
+      tint,
+      gravityY: 0,
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    }).setDepth(config.render.player + 1);
+  }
+
   /** Currents live in world space so they stay put as the camera dives. */
   private createCurrentEmitter(zone: CurrentZone) {
+    const { particleSpeed, particleSpread, particleLifeMs, particleEveryMs } = config.current;
     const width = this.scene.physics.world.bounds.width;
-    const speed = Math.sign(zone.forceX) * Math.max(Math.abs(zone.forceX) * 0.45, 24);
+    const speedX = (zone.forceX ?? 0) * particleSpeed;
+    const speedY = (zone.forceY ?? 0) * particleSpeed;
 
     const emitter = this.scene.add.particles(0, zone.y, 'planktonParticle', {
       emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(0, 0, width, zone.height) },
-      lifespan: 3200,
-      speedX: { min: speed * 0.6, max: speed * 1.4 },
-      speedY: { min: -12, max: 12 },
+      lifespan: particleLifeMs,
+      speedX: { min: speedX * 0.6 - particleSpread, max: speedX * 1.4 + particleSpread },
+      speedY: { min: speedY * 0.6 - particleSpread, max: speedY * 1.4 + particleSpread },
       scale: { start: 0.35, end: 0 },
       alpha: { start: 0.55, end: 0 },
       quantity: 2,
-      frequency: 180,
+      frequency: particleEveryMs,
       gravityY: 0,
       blendMode: Phaser.BlendModes.ADD,
     });

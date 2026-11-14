@@ -29,6 +29,7 @@ export class AnglerFish extends BaseEnemy {
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, {
       texture: 'enemy1',
+      terrainRadius: config.terrain.enemyRadius.anglerFish,
       animation: 'enemy-swim',
       drag: 0.9,
       bounce: 0.5,
@@ -55,6 +56,12 @@ export class AnglerFish extends BaseEnemy {
     this.sprite.setFrame(settings.biteFrame);
     this.delay(settings.biteFrameMs, () => this.sprite.anims.play('enemy-swim'));
     this.enter(AnglerState.Recover);
+  }
+
+  protected onTerrainContact() {
+    if (this.state === AnglerState.Lunge) {
+      this.enter(AnglerState.Recover);
+    }
   }
 
   protected think(delta: number, context: EnemyContext) {

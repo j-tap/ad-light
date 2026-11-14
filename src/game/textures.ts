@@ -1,13 +1,13 @@
 import Phaser from 'phaser';
-import { config } from '../config';
 
 /**
  * Textures are shared game-wide, so generated ones are created only on first request
  * and reused by every scene afterwards.
  */
-export const DEPTH_GRADIENT = 'depthGradient';
 export const EMPTY_TEXTURE = 'emptyTexture';
-export const ROCK_OVERHANG_SHADOW = 'rockOverhangShadow';
+export const SOFT_GLOW = 'softGlow';
+
+const SOFT_GLOW_SIZE = 128;
 
 export function ensureTexture(
   scene: Phaser.Scene,
@@ -29,11 +29,26 @@ export function ensureTexture(
   return key;
 }
 
-export function ensureDepthGradient(scene: Phaser.Scene) {
-  return ensureTexture(scene, DEPTH_GRADIENT, 8, 512, graphics => {
-    graphics.fillGradientStyle(0x0a1119, 0x0a1119, 0x02040a, 0x02040a, 1);
-    graphics.fillRect(0, 0, 8, 512);
-  });
+/** Canvas flavour of ensureTexture for art that needs curves, clipping and soft gradients. */
+export function ensureCanvasTexture(
+  scene: Phaser.Scene,
+  key: string,
+  width: number,
+  height: number,
+  draw: (context: CanvasRenderingContext2D) => void
+): string {
+  if (scene.textures.exists(key)) {
+    return key;
+  }
+
+  const texture = scene.textures.createCanvas(key, Math.ceil(width), Math.ceil(height));
+
+  if (!texture) return key;
+
+  draw(texture.getContext());
+  texture.refresh();
+
+  return key;
 }
 
 export function ensureEmptyTexture(scene: Phaser.Scene) {
@@ -43,11 +58,24 @@ export function ensureEmptyTexture(scene: Phaser.Scene) {
   });
 }
 
-export function ensureRockOverhangShadow(scene: Phaser.Scene) {
-  if (scene.textures.exists(ROCK_OVERHANG_SHADOW)) return;
+/** White radial falloff, tinted and additively blended wherever something has to glow. */
+export function ensureSoftGlow(scene: Phaser.Scene) {
+  return ensureCanvasTexture(scene, SOFT_GLOW, SOFT_GLOW_SIZE, SOFT_GLOW_SIZE, context => {
+    const half = SOFT_GLOW_SIZE / 2;
+    const gradient = context.createRadialGradient(half, half, 0, half, half, half);
 
-  ensureTexture(scene, ROCK_OVERHANG_SHADOW, 64, 40, graphics => {
-    graphics.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.48, 0.48, 0, 0);
-    graphics.fillRect(0, 0, 64, 40);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    gradient.addColorStop(0.35, 'rgba(255, 255, 255, 0.45)');
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, SOFT_GLOW_SIZE, SOFT_GLOW_SIZE);
+  });
+}
+
+export function solidTexture(scene: Phaser.Scene, key: string, color: string) {
+  return ensureCanvasTexture(scene, key, 4, 4, context => {
+    context.fillStyle = color;
+    context.fillRect(0, 0, 4, 4);
   });
 }

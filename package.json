@@ -1,7 +1,7 @@
 {
   "author": "j-tap",
   "name": "ad-light",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

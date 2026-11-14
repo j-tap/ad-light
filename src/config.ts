@@ -9,15 +9,29 @@ export interface SpawnIndent {
   right?: number,
 }
 
+export interface LevelPoint {
+  x: number,
+  y: number,
+}
+
 export interface EnemySpawnConfig {
   kind: EnemyKind,
-  count: number,
+  /** Random spawns inside the world bounds. */
+  count?: number,
   indent?: SpawnIndent,
+  /** Hand placed spawns, used where the level geometry leaves no room for chance. */
+  at?: LevelPoint[],
+}
+
+export interface MolluskNest extends LevelPoint {
+  count: number,
 }
 
 export interface MolluskConfig {
   count: number,
   indent?: SpawnIndent,
+  /** Hand placed nests; `count` then only describes the total for the interface. */
+  nests?: MolluskNest[],
 }
 
 export interface LevelTextures {
@@ -28,55 +42,67 @@ export interface LevelTextures {
 
 export type LevelOrientation = 'horizontal' | 'vertical';
 
-export interface DepthEffects {
-  ambientFrom: number,
-  ambientTo: number,
-  lightDrainFrom: number,
-  lightDrainTo: number,
+/** Ambient light and fuel drain at a given depth; values in between are interpolated. */
+export interface DepthKey {
+  y: number,
+  ambient: number,
+  drain: number,
 }
 
+/** Water speed in px/s, added on top of whatever the player swims. */
 export interface CurrentZone {
   y: number,
   height: number,
-  forceX: number,
+  forceX?: number,
+  forceY?: number,
 }
 
-export type RockSide = 'top' | 'bottom' | 'left' | 'right';
+export type RockSide = 'top' | 'bottom';
 
 export interface RockObstacleDef {
   x: number,
-  y: number,
   width: number,
-  height: number,
   side: RockSide,
 }
 
-export interface RockTextures {
-  top: string[],
-  bottom: string[],
-  left: string[],
-  right: string[],
+export type ShaftSide = 'left' | 'right';
+
+export type CoralKind = 'branch' | 'tubes' | 'frond' | 'great';
+
+export interface CoralPlacement {
+  kind: CoralKind,
+  palette: number,
+  /** The coral stands on the first rock found at this x between the two depths. */
+  x: number,
+  side: ShaftSide,
+  from: number,
+  to: number,
+  scale: number,
+  /** Drawn in front of the fish instead of behind it. */
+  front?: boolean,
+  light?: { radius: number, intensity: number },
 }
 
-export interface RockSettings {
-  bodyColor: number,
-  overhangShadowHeight: number,
-  overhangShadowAlpha: number,
-  particleCount: number,
-  particleColor: number,
-  hazardGlowColor: number,
-  hazardGlowStrength: number,
-  hazardGlowDistance: number,
-  hazardStripeColor: number,
-  hitShakeDuration: number,
-  hitShakeIntensity: number,
-  hitCooldownMs: number,
-  hitStunDuration: number,
-  krakenCatchUpMultiplier: number,
-  krakenCatchUpDuration: number,
-  krakenSurgeDistance: number,
-  molluskDeadZone: number,
-  textures: RockTextures,
+export interface DepthHint {
+  y: number,
+  text: string,
+}
+
+export interface ShaftLedge {
+  side: ShaftSide,
+  y: number,
+  height: number,
+  /** How far the feature reaches from its wall, in px from the world edge. */
+  reach: number,
+}
+
+export interface ShaftConfig {
+  /** Wall thickness control points as [depth, inset from the world edge]. */
+  left: [number, number][],
+  right: [number, number][],
+  ledges: ShaftLedge[],
+  /** Pockets carved into a wall, the opposite of a ledge. */
+  alcoves: ShaftLedge[],
 }
 
 export interface LevelLighting {
@@ -90,22 +116,7 @@ export interface EscapeConfig {
   finishX: number,
 }
 
-export interface TentacleSettings {
-  texture: string,
-  initialDelayMs: number,
-  intervalMs: { min: number, max: number },
-  targetOffsetX: { min: number, max: number },
-  startWorldX: number,
-  endWorldX: number,
-  warningMs: number,
-  warningColor: number,
-  strikeMs: number,
-  holdMs: number,
-  retractMs: number,
-  width: number,
-}
-
-export type LevelGoal = 'collect' | 'escape';
+export type LevelGoal = 'collect' | 'escape' | 'descend';
 
 export interface LevelConfig {
   width: number,
@@ -121,14 +132,13 @@ export interface LevelConfig {
   plankton?: boolean,
   /** Turns the level opening into a scripted teaching zone. */
   tutorial?: boolean,
-  depthEffects?: DepthEffects,
+  /** Shown once as the level opens. */
+  title?: string,
+  depthProfile?: DepthKey[],
   currentZones?: CurrentZone[],
-  finaleHeight?: number,
   rocks?: RockObstacleDef[],
-  /** Parallax multiplier for the viewport foreground layer (default 3). */
-  foregroundParallax?: number,
-  /** Amber hazard markers on rock colliders so they read clearly against the bg. */
-  markRockHazards?: boolean,
+  shaft?: ShaftConfig,
+  spawn?: LevelPoint,
   /** Kraken tentacle sweeps during the chase segment. */
   tentacleAttacks?: boolean,
 }
@@ -160,10 +170,13 @@ export const config = {
     gravityY: 50,
     groundHeight: 45,
     groundOffsetY: 35,
-    depthUpdateStep: 0.02,
+    /** Depth pressure is refreshed once the fish has moved this far vertically. */
+    depthUpdateStep: 40,
   },
-  /** Draw order: kraken < tentacles < player < fg decor < rock protrusions. */
+  /** Draw order: scenery < kraken arms < kraken < strike warning < player < fg decor < rock. */
   render: {
+    scenery: 3,
+    krakenArm: 5,
     kraken: 6,
     tentacle: 7,
     player: 8,
@@ -288,9 +301,12 @@ export const config = {
     scale: 0.6,
     lightRadius: 100,
     lightColor: 0x66ccff,
+    sparkle: { count: 12, speed: 150, lifespanMs: 520, tint: 0x9fe6ff, scale: 0.4 },
     nest: {
       size: { min: 2, max: 4 },
       radius: 130,
+      placedRadius: 60,
+      wallMargin: 60,
       spacing: 700,
       padding: 100,
     },
@@ -308,45 +324,322 @@ export const config = {
       tiltRad: 0.12,
     },
   },
+  terrain: {
+    cellSize: 160,
+    backfaceLimit: 24,
+    passes: 3,
+    /** The fish is pushed out of rock as two circles along its body. */
+    playerRadius: 26,
+    playerSpread: 24,
+    enemyRadius: { anglerFish: 34, swallowtail: 30, jellyfish: 32 } as Record<EnemyKind, number>,
+  },
   rock: {
-    bodyColor: 0x2a2420,
-    overhangShadowHeight: 36,
-    overhangShadowAlpha: 0.38,
-    particleCount: 10,
-    particleColor: 0x4a4438,
-    hazardGlowColor: 0x9a7a55,
-    hazardGlowStrength: 1.4,
-    hazardGlowDistance: 5,
-    hazardStripeColor: 0xffcc66,
+    paint: {
+      palette: {
+        shade: '#2e3227',
+        body: '#474a37',
+        light: '#5c5e46',
+        strata: '#262a20',
+        outline: '#0b0e0a',
+        grainDark: 'rgba(10, 13, 9, 0.24)',
+        grainLight: 'rgba(160, 160, 120, 0.13)',
+      },
+      rimWidth: 110,
+      lightRimWidth: 22,
+      outlineWidth: 9,
+      strataWidth: 3,
+      grainDensity: 9,
+      crackWidth: 4.5,
+      crackSpacing: { min: 130, max: 300 },
+      crackLength: { min: 40, max: 120 },
+      crackBend: 0.55,
+    },
+    obstacle: {
+      variants: 4,
+      seed: 4107,
+      textureWidth: 360,
+      textureHeight: 460,
+      /** Spike height as a share of the tunnel height, so the gap scales with the screen. */
+      viewportShare: 0.47,
+      minHeight: 250,
+      maxHeight: 520,
+      sidePoints: 7,
+      jag: 0.07,
+      lean: 0.16,
+      colliderInset: 0.88,
+    },
+    hitSpeed: 110,
     hitShakeDuration: 180,
     hitShakeIntensity: 4,
     hitCooldownMs: 700,
-    hitStunDuration: 420,
+    hitStunDuration: 320,
     krakenCatchUpMultiplier: 2.8,
     krakenCatchUpDuration: 900,
     krakenSurgeDistance: 90,
-    molluskDeadZone: 250,
-    textures: {
-      top: ['rockTop'],
-      bottom: ['rockBottom'],
-      left: ['rockLeft', 'rockLeft2'],
-      right: ['rockLeft', 'rockLeft2'],
+  },
+  chase: {
+    krakenSpawnX: -2000,
+    introDelayMs: 1000,
+    introShakeMs: 1000,
+    introShakeIntensity: 0.01,
+    huntDelayMs: 500,
+    rumbleEveryMs: 2000,
+    rumbleMs: 350,
+    rumbleIntensity: 0.003,
+  },
+  kraken: {
+    mouthOffsetX: 200,
+    mouthOffsetY: 150,
+    mouthSize: { width: 300, height: 200 },
+    followFactorX: 0.017,
+    followFactorY: 0.34,
+    wobbleSpeed: 0.005,
+    wobbleAmount: 5,
+    breathMs: 1700,
+    breathAmount: 0.022,
+    glow: { radius: 420, color: 0x88aacc, intensity: 1.35 },
+    /** Offsets are measured from the sprite centre on the unflipped artwork. */
+    eye: { offsetX: 18, offsetY: 6, color: 0xffd98a, scale: 0.85, alpha: 0.55, pulse: 0.2, pulseMs: 900 },
+    /** The artwork has a see-through mouth; a dark throat behind it keeps the water out. */
+    maw: { offsetX: 250, offsetY: 172, width: 380, height: 200, angle: 8, inner: '#0d0504', outer: '#2a0d0a' },
+    /** The lashing arm leaves the body above the head or below the jaw, never through the mouth. */
+    strikeAnchor: {
+      top: { offsetX: 150, offsetY: -40 },
+      bottom: { offsetX: 40, offsetY: 300 },
     },
-  } as RockSettings,
+  },
   tentacle: {
-    texture: 'krakenTentacle',
-    initialDelayMs: 2800,
-    intervalMs: { min: 2600, max: 4000 },
-    targetOffsetX: { min: -40, max: 100 },
-    startWorldX: 1500,
-    endWorldX: 11200,
-    warningMs: 380,
-    warningColor: 0xcc5544,
-    strikeMs: 200,
-    holdMs: 140,
-    retractMs: 160,
-    width: 92,
-  } as TentacleSettings,
+    texture: 'krakenArm',
+    paint: {
+      length: 512,
+      thickness: 96,
+      tipThickness: 12,
+      outlineWidth: 7,
+      suckers: 10,
+      skin: '#2b291d',
+      skinLight: '#3d3a29',
+      outline: '#0b0b08',
+      sucker: '#857b5d',
+      suckerDark: '#3a3526',
+    },
+    points: 18,
+    /** Arms that sway around the body between attacks; angles in degrees on the unflipped artwork. */
+    idle: [
+      { offsetX: 150, offsetY: -40, angle: -44, length: 430, width: 98, sway: 50, bend: 110, swayMs: 2300, phase: 0 },
+      { offsetX: 40, offsetY: 300, angle: 24, length: 490, width: 106, sway: 56, bend: -90, swayMs: 2700, phase: 1.9 },
+      { offsetX: -60, offsetY: 250, angle: 112, length: 410, width: 94, sway: 44, bend: 80, swayMs: 3100, phase: 3.4 },
+      { offsetX: -150, offsetY: 120, angle: 172, length: 390, width: 90, sway: 46, bend: -70, swayMs: 2500, phase: 5.1 },
+    ],
+    idleCurl: 0.9,
+    strike: {
+      initialDelayMs: 2800,
+      intervalMs: { min: 2600, max: 4000 },
+      startWorldX: 1500,
+      endWorldX: 11200,
+      warningMs: 560,
+      strikeMs: 190,
+      holdMs: 220,
+      retractMs: 280,
+      /** The aim leads the fish by this much of its current velocity. */
+      leadMs: 300,
+      overshootX: 170,
+      wallMargin: 20,
+      /** Where along the arm the aimed spot sits, 0 at the body and 1 at the tip. */
+      passAt: 0.6,
+      width: 118,
+      hitRadius: 44,
+      wobble: 14,
+      wobbleMs: 240,
+      warningColor: 0xd9604a,
+      warningWidth: 26,
+      warningAlpha: 0.3,
+      markerRadius: 46,
+      hintCount: 2,
+      shakeMs: 220,
+      shakeIntensity: 0.014,
+    },
+  },
+  trench: {
+    walls: {
+      seed: 9173,
+      sampleStep: 8,
+      collisionStride: 2,
+      overscan: 96,
+      /** Deliberately not a power of two: those textures wrap, and the seams would bleed. */
+      chunkHeight: 480,
+      chunkPad: 200,
+      outerPad: 40,
+      edgeMargin: 12,
+      fillerWidth: 3000,
+      rightPhase: 2.4,
+      /** Layered sine wobble as [period px, amplitude px]. */
+      roughness: [[37, 8], [91, 7], [13.7, 3]] as [number, number][],
+      ledgeShelf: 0.2,
+      ledgeTip: 0.46,
+      alcoveLip: 0.28,
+      strataSpacing: { min: 110, max: 230 },
+      strataSteps: 12,
+      strataReach: 1100,
+      floorHeight: 76,
+      floorWave: 12,
+      floorStep: 24,
+    },
+    depthMeter: { surfaceMeters: 640, metersPerPx: 0.2 },
+    startHintDelayMs: 2600,
+    hints: [
+      { y: 2000, text: 'The current drags you down. The only way is deeper' },
+      { y: 3900, text: 'Let go and you sink without a sound' },
+      { y: 6450, text: 'They hunt by sound: stop swimming and sink past them' },
+      { y: 7850, text: 'Hold SHIFT to slip past the lures unseen' },
+      { y: 9400, text: 'Something warm glows at the very bottom' },
+    ] as DepthHint[],
+    vent: {
+      x: 800,
+      chimneyWidth: 190,
+      chimneyHeight: 200,
+      chimneyVariant: 2,
+      triggerRadius: 170,
+      triggerDepth: 150,
+      color: 0xff9a4a,
+      coreColor: 0xffe2a8,
+      glowScale: 2.6,
+      glowPulse: 0.25,
+      pulseMs: 1600,
+      light: { radius: 380, intensity: 1.7, pulse: 0.5 },
+      embers: { everyMs: 90, speed: { min: 60, max: 170 }, drift: 26, lifespanMs: 2300, scale: 0.32 },
+      eruption: { everyMs: 10, speedScale: 5, lifespanMs: 2600, lightRadius: 900, lightIntensity: 4, glowScale: 6 },
+    },
+    finale: {
+      rumbleMs: 1500,
+      rumbleIntensity: 0.012,
+      gatherMs: 800,
+      liftDelayMs: 1200,
+      musicFadeMs: 1200,
+      resultHoldMs: 2600,
+      victoryVolume: 0.4,
+    },
+    ride: {
+      step: 20,
+      smoothRows: 6,
+      wallMargin: 140,
+      startSpeed: 160,
+      maxSpeed: 980,
+      acceleration: 620,
+      /** Speed shed per px left to the arrival point, which eases the fish out of the neck. */
+      brake: 1.5,
+      endSpeed: 170,
+      arriveY: 1230,
+      exitSpeed: 150,
+      cameraOffsetY: 150,
+      cameraOffsetMs: 900,
+      turnRate: 0.2,
+      trail: { everyMs: 24, speed: { min: 90, max: 280 }, drift: 40, lifespanMs: 900, scale: 0.45, tint: 0xbfe9ff },
+    },
+    garden: {
+      plugY: 1565,
+      plugPad: 30,
+      ceilingY: 240,
+      ceilingPush: 0.12,
+      ceilingHint: 'No higher. Up there a blobfish comes apart',
+      hint: 'Swim to the great coral',
+      hintDelayMs: 1500,
+      reachRadius: 300,
+      timeoutMs: 26000,
+      restOffset: { x: -340, y: 20 },
+      settleMs: 2200,
+      bobPx: 6,
+      bobMs: 2400,
+      updraft: { everyMs: 70, speed: { min: 70, max: 190 }, lifespanMs: 2200, scale: 0.28 },
+      skylight: { height: 1150, alpha: 0.5, color: '96, 168, 235', strength: 0.6, beams: 4 },
+      motes: { everyMs: 130, lifespanMs: 6500, rise: { min: 6, max: 22 }, scale: { min: 0.03, max: 0.09 }, top: 180, bottom: 1500 },
+      glowAlpha: 0.32,
+      glowScale: 1.5,
+      sway: { degrees: { min: 1.2, max: 3.2 }, ms: { min: 2600, max: 4400 } },
+      embed: 14,
+      layout: [
+        { kind: 'frond', palette: 1, x: 215, side: 'left', from: 590, to: 780, scale: 0.8 },
+        { kind: 'branch', palette: 3, x: 330, side: 'left', from: 590, to: 780, scale: 0.7 },
+
+        { kind: 'tubes', palette: 2, x: 1335, side: 'right', from: 350, to: 560, scale: 0.85 },
+        { kind: 'branch', palette: 1, x: 1240, side: 'right', from: 350, to: 560, scale: 0.75, light: { radius: 240, intensity: 1.1 } },
+        { kind: 'frond', palette: 3, x: 1410, side: 'right', from: 350, to: 560, scale: 0.7 },
+
+        { kind: 'frond', palette: 1, x: 205, side: 'left', from: 1250, to: 1560, scale: 1 },
+        { kind: 'branch', palette: 2, x: 335, side: 'left', from: 1250, to: 1560, scale: 1.05, light: { radius: 300, intensity: 1.3 } },
+        { kind: 'tubes', palette: 3, x: 465, side: 'left', from: 1250, to: 1560, scale: 0.9 },
+        { kind: 'frond', palette: 0, x: 560, side: 'left', from: 1250, to: 1560, scale: 0.65 },
+        { kind: 'branch', palette: 0, x: 250, side: 'left', from: 1250, to: 1560, scale: 0.5, front: true },
+
+        { kind: 'tubes', palette: 1, x: 1060, side: 'right', from: 1250, to: 1560, scale: 0.7 },
+        { kind: 'frond', palette: 3, x: 1150, side: 'right', from: 1250, to: 1560, scale: 0.8 },
+        { kind: 'tubes', palette: 2, x: 1395, side: 'right', from: 1250, to: 1560, scale: 0.9 },
+        { kind: 'frond', palette: 1, x: 1440, side: 'right', from: 1250, to: 1560, scale: 0.6, front: true },
+
+      ] as CoralPlacement[],
+      /** The destination: the biggest coral of the garden, on the right shelf. */
+      greatCoral: {
+        kind: 'great', palette: 0, x: 1265, side: 'right', from: 1250, to: 1560, scale: 1,
+        light: { radius: 460, intensity: 1.8 },
+      } as CoralPlacement,
+    },
+    ending: {
+      lines: [
+        'A thousand metres down.',
+        'Any higher, and a blobfish comes apart.',
+        'But here, at last, there is light.',
+      ],
+      lineEveryMs: 2800,
+      lineFadeMs: 1100,
+      lineSpacing: 38,
+      bottomMargin: 120,
+      holdMs: 4200,
+      skipAfterMs: 1800,
+      zoom: 0.92,
+      zoomMs: 6000,
+      panOffset: { x: 120, y: 110 },
+    },
+    backdrop: {
+      size: 1024,
+      seed: 311,
+      base: '#1a222b',
+      tones: ['#232d37', '#141a21', '#2a3540'],
+      columns: 7,
+      specks: 900,
+    },
+  },
+  current: {
+    /** Particle speed as a share of the water speed, so the drift reads without being a blur. */
+    particleSpeed: 0.45,
+    particleSpread: 12,
+    particleLifeMs: 3200,
+    particleEveryMs: 180,
+  },
+  coral: {
+    seed: 6151,
+    outline: '#0b1216',
+    outlineWidth: 6,
+    size: {
+      branch: { width: 400, height: 360 },
+      great: { width: 820, height: 700 },
+      tubes: { width: 280, height: 230 },
+      frond: { width: 240, height: 420 },
+    } as Record<CoralKind, { width: number, height: number }>,
+    branch: { depth: 4, minWidth: 7, trunk: 30, maxLean: 0.95 },
+    great: { depth: 6, minWidth: 7, trunk: 46, maxLean: 1.05 },
+    /** Corals fade into the dark towards their base, so the lit tips read as the glow. */
+    shade: { color: '6, 18, 30', strength: 0.78, from: 0.3 },
+    tubes: { count: 6, width: { min: 30, max: 46 } },
+    frond: { blades: 4, rootSpread: 22, lean: 26, width: { min: 26, max: 40 } },
+    palettes: [
+      { body: '#dc7f8f', light: '#f2a9ab', tip: '#ffe6da', glow: 0xff8fa0 },
+      { body: '#3fb5ab', light: '#74d6c8', tip: '#dcfff5', glow: 0x5fe0cf },
+      { body: '#dba552', light: '#f0c67e', tip: '#fff2cc', glow: 0xffc070 },
+      { body: '#8a7fe0', light: '#b0a6f4', tip: '#ebe6ff', glow: 0xa596ff },
+    ],
+  },
+  hud: {
+    title: { fadeMs: 700, holdMs: 1500 },
+  },
   records: {
     timerUpdateMs: 100,
     resultToastMs: 1600,
@@ -355,6 +648,7 @@ export const config = {
   levels: {
     1: {
       width: 5000,
+      title: 'Dim Waters',
       tutorial: true,
       music: ['gameMusic1'],
       textures: {
@@ -372,6 +666,7 @@ export const config = {
     },
     2: {
       width: 8000,
+      title: 'The Dark',
       music: ['gameMusic2'],
       textures: {
         backgroundFar: 'level2BgFar',
@@ -389,11 +684,11 @@ export const config = {
     },
     3: {
       width: 12000,
+      title: 'The Kraken',
       music: ['gameMusic3'],
       goal: 'escape',
       escape: { finishX: 11500 },
       plankton: true,
-      markRockHazards: true,
       tentacleAttacks: true,
       lighting: {
         ambientColor: 0x3a4a8a,
@@ -411,90 +706,127 @@ export const config = {
         count: 0,
       },
       rocks: [
-        { x: 1700, y: 0, width: 300, height: 0, side: 'top' },
-        { x: 2900, y: 0, width: 280, height: 0, side: 'bottom' },
-        { x: 4100, y: 0, width: 260, height: 0, side: 'top' },
-        { x: 4700, y: 0, width: 260, height: 0, side: 'bottom' },
-        { x: 5600, y: 0, width: 320, height: 0, side: 'top' },
-        { x: 6800, y: 0, width: 300, height: 0, side: 'bottom' },
-        { x: 7900, y: 0, width: 280, height: 0, side: 'top' },
-        { x: 8500, y: 0, width: 260, height: 0, side: 'bottom' },
-        { x: 9400, y: 0, width: 300, height: 0, side: 'top' },
-        { x: 10400, y: 0, width: 280, height: 0, side: 'bottom' },
+        { x: 1700, width: 300, side: 'top' },
+        { x: 2900, width: 280, side: 'bottom' },
+        { x: 4100, width: 260, side: 'top' },
+        { x: 4700, width: 260, side: 'bottom' },
+        { x: 5600, width: 320, side: 'top' },
+        { x: 6800, width: 300, side: 'bottom' },
+        { x: 7900, width: 280, side: 'top' },
+        { x: 8500, width: 260, side: 'bottom' },
+        { x: 9400, width: 300, side: 'top' },
+        { x: 10400, width: 280, side: 'bottom' },
       ],
     },
     4: {
       width: 1600,
-      height: 9000,
+      height: 11000,
       orientation: 'vertical',
+      title: 'The Trench',
       music: ['gameMusic2'],
+      goal: 'descend',
       plankton: true,
-      finaleHeight: 1400,
-      depthEffects: {
-        ambientFrom: 0x1a2a6c,
-        ambientTo: 0x05070d,
-        lightDrainFrom: 1,
-        lightDrainTo: 1.8,
-      },
+      spawn: { x: 800, y: 2040 },
+      depthProfile: [
+        { y: 0, ambient: 0x3f6f9c, drain: 0 },
+        { y: 1500, ambient: 0x2c5682, drain: 0 },
+        { y: 1950, ambient: 0x14265a, drain: 1 },
+        { y: 2500, ambient: 0x1a2a6c, drain: 1 },
+        { y: 9300, ambient: 0x05070d, drain: 1.8 },
+        { y: 11000, ambient: 0x020305, drain: 2.2 },
+      ],
       currentZones: [
-        { y: 1600, height: 700, forceX: 90 },
-        { y: 3400, height: 800, forceX: -100 },
-        { y: 5400, height: 700, forceX: 80 },
-        { y: 7200, height: 650, forceX: -90 },
+        // The neck: nothing swims back up against this.
+        { y: 1560, height: 780, forceY: 430 },
+        { y: 5300, height: 500, forceX: 110 },
+        { y: 5950, height: 500, forceX: -120 },
       ],
       textures: {
-        backgroundFar: 'level3BgFar',
-        background: 'depthGradient',
+        backgroundFar: 'trenchBackdrop',
+        background: 'emptyTexture',
         foreground: 'emptyTexture',
       },
+      shaft: {
+        left: [
+          // Coral garden with a shelf that funnels into the neck.
+          [0, 150], [500, 120], [1000, 170], [1330, 150], [1420, 500], [1520, 640], [1700, 660],
+          [2200, 650],
+          // Opening chamber.
+          [2360, 260], [2500, 170], [4000, 170],
+          // Jellyfish chimney.
+          [4180, 540], [5000, 540], [5180, 190],
+          [7800, 190],
+          // The squeeze: a narrow channel that snakes left and back.
+          [7960, 700], [8200, 700], [8520, 380], [8760, 380], [9080, 720], [9180, 720],
+          // The abyss.
+          [9340, 170], [10300, 160], [11000, 230],
+        ],
+        right: [
+          [0, 160], [600, 120], [1100, 160], [1340, 160], [1430, 520], [1530, 650], [1700, 660],
+          [2200, 650],
+          [2360, 280], [2500, 190], [4000, 180],
+          [4180, 540], [5000, 540], [5180, 180],
+          [7800, 180],
+          [7960, 550], [8200, 550], [8520, 870], [8760, 870], [9080, 530], [9180, 530],
+          [9340, 170], [10300, 160], [11000, 230],
+        ],
+        ledges: [
+          { side: 'left', y: 640, height: 170, reach: 400 },
+          { side: 'right', y: 400, height: 170, reach: 420 },
+
+          // Long shelves turn the fall into a serpentine: every gap is on the far side.
+          { side: 'left', y: 3020, height: 240, reach: 1120 },
+          { side: 'right', y: 3500, height: 240, reach: 1150 },
+
+          { side: 'right', y: 5540, height: 210, reach: 1000 },
+          { side: 'left', y: 6070, height: 210, reach: 1000 },
+
+          { side: 'right', y: 6620, height: 200, reach: 1100 },
+          { side: 'left', y: 7020, height: 200, reach: 1100 },
+          { side: 'right', y: 7420, height: 200, reach: 1100 },
+        ],
+        alcoves: [
+          { side: 'left', y: 8000, height: 190, reach: 430 },
+          { side: 'right', y: 8560, height: 190, reach: 590 },
+        ],
+      },
       enemies: [
-        { kind: 'jellyfish', count: 6, indent: { top: 400, bottom: 400 } },
-        { kind: 'swallowtail', count: 3, indent: { top: 800, bottom: 500 } },
+        {
+          kind: 'jellyfish',
+          at: [
+            { x: 880, y: 3390 },
+            { x: 690, y: 4300 }, { x: 910, y: 4500 }, { x: 700, y: 4700 }, { x: 920, y: 4900 },
+            { x: 320, y: 5650 }, { x: 820, y: 5910 }, { x: 1290, y: 6180 }, { x: 520, y: 6430 },
+            { x: 420, y: 9620 }, { x: 1180, y: 9860 }, { x: 860, y: 10220 },
+          ],
+        },
+        {
+          kind: 'swallowtail',
+          at: [{ x: 820, y: 6920 }, { x: 760, y: 7320 }, { x: 560, y: 7710 }],
+        },
+        {
+          kind: 'anglerFish',
+          at: [{ x: 600, y: 8095 }, { x: 800, y: 8655 }],
+        },
       ],
       mollusks: {
-        count: 16,
-        indent: {
-          top: 350,
-          bottom: 180,
-        },
+        count: 24,
+        nests: [
+          { x: 1010, y: 2900, count: 3 },
+          { x: 620, y: 3390, count: 2 },
+          { x: 800, y: 5160, count: 3 },
+          // Pockets above the shelves: the current carries you in and has to be fought on the way out.
+          { x: 1240, y: 5440, count: 2 },
+          { x: 380, y: 5980, count: 3 },
+          { x: 1080, y: 6930, count: 2 },
+          { x: 520, y: 7330, count: 2 },
+          { x: 740, y: 8095, count: 1 },
+          { x: 660, y: 8655, count: 1 },
+          { x: 800, y: 9460, count: 2 },
+          { x: 520, y: 9960, count: 2 },
+          { x: 1080, y: 10360, count: 1 },
+        ],
       },
-      rocks: [
-        // --- Section 1 (y 800–1800): passage shifts right ---
-        { x: 0, y: 800, width: 700, height: 280, side: 'left' },
-        { x: 0, y: 1300, width: 850, height: 300, side: 'left' },
-        { x: 0, y: 1100, width: 300, height: 200, side: 'right' },
-
-        // --- Section 2 (y 2000–3200): passage shifts left ---
-        { x: 0, y: 2000, width: 350, height: 260, side: 'right' },
-        { x: 0, y: 2500, width: 800, height: 320, side: 'right' },
-        { x: 0, y: 2200, width: 280, height: 200, side: 'left' },
-        // Dead-end niche on right
-        { x: 0, y: 2900, width: 500, height: 240, side: 'right' },
-
-        // --- Section 3 (y 3400–4400): narrow center ---
-        { x: 0, y: 3400, width: 550, height: 300, side: 'left' },
-        { x: 0, y: 3500, width: 500, height: 280, side: 'right' },
-        { x: 0, y: 3900, width: 650, height: 260, side: 'left' },
-        { x: 0, y: 4000, width: 600, height: 250, side: 'right' },
-
-        // --- Section 4 (y 4600–5600): wide-then-tight, passage right ---
-        { x: 0, y: 4600, width: 900, height: 350, side: 'left' },
-        { x: 0, y: 5000, width: 950, height: 300, side: 'left' },
-        { x: 0, y: 4800, width: 250, height: 200, side: 'right' },
-
-        // --- Section 5 (y 5800–6800): passage left ---
-        { x: 0, y: 5800, width: 300, height: 250, side: 'left' },
-        { x: 0, y: 5900, width: 850, height: 320, side: 'right' },
-        { x: 0, y: 6400, width: 900, height: 280, side: 'right' },
-        // Dead-end niche on left
-        { x: 0, y: 6200, width: 500, height: 220, side: 'left' },
-
-        // --- Section 6 (y 7000–7800): final squeeze ---
-        { x: 0, y: 7000, width: 600, height: 300, side: 'left' },
-        { x: 0, y: 7000, width: 550, height: 280, side: 'right' },
-        { x: 0, y: 7400, width: 700, height: 260, side: 'left' },
-        { x: 0, y: 7500, width: 650, height: 250, side: 'right' },
-      ],
     }
   } as Record<number, LevelConfig>,
 }

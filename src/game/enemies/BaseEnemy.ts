@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BubbleEmitter, BubbleEmitterConfig } from '../BubbleEmitter';
 import { NoiseField } from '../systems/NoiseField';
+import { Terrain } from '../systems/Terrain';
 import { config } from '../../config';
 
 export interface EnemyContext {
@@ -34,6 +35,8 @@ export interface EnemyHitAreaConfig {
 
 export interface BaseEnemyConfig {
   texture: string,
+  /** Radius of the circle that keeps the enemy out of solid rock. */
+  terrainRadius: number,
   senses: EnemySenses,
   animation?: string,
   /** Set when the artwork looks left, so facing and attachment offsets stay in sync. */
@@ -56,6 +59,7 @@ export abstract class BaseEnemy {
   protected readonly sprite: Phaser.Physics.Arcade.Sprite;
   protected readonly senses: EnemySenses;
   private readonly facesLeft: boolean;
+  private readonly terrainRadius: number;
   /** Where the player was last noticed: enemies commit to this, not to the live position. */
   protected sensedX = 0;
   protected sensedY = 0;
@@ -71,6 +75,7 @@ export abstract class BaseEnemy {
     this.scene = scene;
     this.senses = config.senses;
     this.facesLeft = config.facesLeft === true;
+    this.terrainRadius = config.terrainRadius;
     this.sprite = this.createSprite(x, y, config);
 
     if (config.light) {
@@ -113,6 +118,16 @@ export abstract class BaseEnemy {
     }
   }
 
+  resolveTerrain(terrain: Terrain) {
+    const contact = terrain.resolveCircle(this.sprite.x, this.sprite.y, this.terrainRadius);
+
+    if (!contact.hit) return;
+
+    this.sprite.setPosition(contact.x, contact.y);
+    this.onTerrainContact(contact.normalX, contact.normalY);
+    this.updateAttachments();
+  }
+
   /** Physics groups re-enable bodies on add, so a plain flag decides who can bite. */
   canDamage() {
     return this.damaging;
@@ -139,6 +154,9 @@ export abstract class BaseEnemy {
   }
 
   protected abstract think(delta: number, context: EnemyContext): void;
+
+  /** The normal points away from the rock that was touched. */
+  protected onTerrainContact(_normalX: number, _normalY: number) {}
 
   protected get body() {
     return this.sprite.body as Phaser.Physics.Arcade.Body;

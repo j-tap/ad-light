@@ -14,6 +14,7 @@ const LIGHT_COLOR_FULL = 0xcff1ff;
 const LIGHT_COLOR_LOW = 0xff6a4a;
 const HINT_BOTTOM_MARGIN = 70;
 const TIMER_TOP = 24;
+const TITLE_Y_RATIO = 0.3;
 
 export class Hud {
   private readonly scene: Phaser.Scene;
@@ -24,12 +25,14 @@ export class Hud {
   private readonly hintText: Phaser.GameObjects.Text;
   private readonly timerText: Phaser.GameObjects.Text;
   private readonly resultText: Phaser.GameObjects.Text;
+  private readonly titleText: Phaser.GameObjects.Text;
   private lightBlinkTween?: Phaser.Tweens.Tween;
   private lastCollected = -1;
   private lastTotal = -1;
   private lastHealth = -1;
   private lastLightRatio = -1;
   private lastTimerLabel = '';
+  private lastGoalLabel = '';
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -81,6 +84,16 @@ export class Hud {
       .setOrigin(0.5)
       .setAlpha(0);
 
+    this.titleText = this.scene.add
+      .text(0, 0, '', {
+        fontSize: '40px',
+        color: '#e8f4ff',
+        fontFamily: 'Arial',
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setAlpha(0);
+
     this.getElements().forEach(element => {
       element.setScrollFactor(0);
       element.setDepth(DEPTH);
@@ -119,8 +132,37 @@ export class Hud {
   }
 
   setGoalLabel(text: string) {
+    if (text === this.lastGoalLabel) return;
+
+    this.lastGoalLabel = text;
     this.molluskText.setVisible(true);
     this.molluskText.setText(text);
+  }
+
+  /** Level name that fades in over the opening seconds and gets out of the way. */
+  showTitle(text: string) {
+    const { fadeMs, holdMs } = config.hud.title;
+
+    this.titleText.setText(text).setAlpha(0);
+    this.scene.tweens.add({
+      targets: this.titleText,
+      alpha: 1,
+      duration: fadeMs,
+      hold: holdMs,
+      yoyo: true,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  /** Hides the gameplay readouts for scripted endings; hints and results stay available. */
+  hideGameplay() {
+    this.scene.tweens.add({
+      targets: [this.molluskText, ...this.hearts, this.lightFrame, this.lightFill, this.timerText],
+      alpha: 0,
+      duration: config.tutorial.fadeMs,
+    });
+    this.lightBlinkTween?.stop();
+    this.lightBlinkTween = undefined;
   }
 
   setHealth(health: number) {
@@ -143,6 +185,7 @@ export class Hud {
     );
     this.timerText.setPosition(this.scene.scale.width - MARGIN, TIMER_TOP);
     this.resultText.setPosition(this.scene.scale.width / 2, this.scene.scale.height / 2);
+    this.titleText.setPosition(this.scene.scale.width / 2, this.scene.scale.height * TITLE_Y_RATIO);
   }
 
   setTime(ms: number) {
@@ -161,6 +204,16 @@ export class Hud {
     this.scene.tweens.add({
       targets: this.resultText,
       alpha: 1,
+      duration: config.tutorial.fadeMs,
+      ease: 'Quad.easeOut',
+    });
+  }
+
+  hideResult() {
+    this.scene.tweens.killTweensOf(this.resultText);
+    this.scene.tweens.add({
+      targets: this.resultText,
+      alpha: 0,
       duration: config.tutorial.fadeMs,
       ease: 'Quad.easeOut',
     });
@@ -208,6 +261,13 @@ export class Hud {
     this.fadeHint(0);
   }
 
+  /** Clears a timed hint only if nothing newer has replaced it meanwhile. */
+  clearHintIf(text: string) {
+    if (this.hintText.text === text) {
+      this.clearHint();
+    }
+  }
+
   private fadeHint(alpha: number) {
     this.scene.tweens.killTweensOf(this.hintText);
     this.scene.tweens.add({
@@ -227,6 +287,7 @@ export class Hud {
       this.hintText,
       this.timerText,
       this.resultText,
+      this.titleText,
     ];
   }
 }

@@ -21,6 +21,7 @@ export class Jellyfish extends BaseEnemy {
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, {
       texture: 'jellyfish',
+      terrainRadius: config.terrain.enemyRadius.jellyfish,
       lit: false,
       bodySize: settings.bodySize,
       senses: settings.senses,

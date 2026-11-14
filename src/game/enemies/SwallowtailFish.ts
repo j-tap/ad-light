@@ -28,6 +28,7 @@ export class SwallowtailFish extends BaseEnemy {
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, {
       texture: 'swallowtail',
+      terrainRadius: config.terrain.enemyRadius.swallowtail,
       facesLeft: true,
       drag: 0.85,
       bounce: 0.4,
@@ -51,6 +52,15 @@ export class SwallowtailFish extends BaseEnemy {
     if (this.state !== SwallowtailState.Dash) return;
 
     this.enter(SwallowtailState.Recover);
+  }
+
+  protected onTerrainContact(normalX: number) {
+    if (this.state === SwallowtailState.Dash) {
+      this.enter(SwallowtailState.Recover);
+    } else if (this.state === SwallowtailState.Patrol && Math.abs(normalX) > 0.5) {
+      this.patrolDirection = Math.sign(normalX);
+      this.patrolTime = 0;
+    }
   }
 
   protected think(delta: number, context: EnemyContext) {

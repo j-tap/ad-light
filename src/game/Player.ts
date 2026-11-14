@@ -3,6 +3,7 @@ import { MovementController } from './MovementController';
 import { BubbleEmitter } from './BubbleEmitter';
 import { LightFuel } from './systems/LightFuel';
 import { NoiseField } from './systems/NoiseField';
+import { Terrain } from './systems/Terrain';
 import { ensureTexture } from './textures';
 import { config } from '../config';
 
@@ -29,6 +30,8 @@ export class Player {
   private idleTween?: Phaser.Tweens.Tween;
   private wasMovingLastFrame = false;
   private isInvulnerable = false;
+  private shielded = false;
+  private scripted = false;
   private alive = true;
   private moveWaveTimer = 0;
   private darknessTimer = 0;
@@ -82,6 +85,69 @@ export class Player {
     this.updateDarknessPressure(delta);
   }
 
+  /**
+   * Cutscenes move the fish themselves: input, physics and damage are switched off, while the
+   * light and the swim cycle keep running through updateScripted.
+   */
+  setScripted(scripted: boolean) {
+    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+
+    this.scripted = scripted;
+    body.enable = !scripted;
+
+    if (scripted) {
+      this.movementController.disable();
+      this.sprite.setVelocity(0, 0);
+      this.stopIdleTween();
+    } else {
+      this.movementController.enable();
+      body.reset(this.sprite.x, this.sprite.y);
+      this.sprite.setRotation(0);
+    }
+  }
+
+  updateScripted(delta: number, swimming: boolean) {
+    if (swimming) {
+      this.sprite.play('swim', true);
+    } else if (this.sprite.anims.isPlaying) {
+      this.sprite.stop();
+      this.sprite.setFrame(1);
+    }
+
+    this.lightFuel.update(delta, false, this.lightDrainMultiplier);
+    this.updateLight(delta);
+  }
+
+  /** False while the fish is being moved by a script and must pass through rock. */
+  isSolid() {
+    return !this.scripted;
+  }
+
+  /** Pushes the fish out of solid rock and returns how hard it ran into it, in px/s. */
+  resolveTerrain(terrain: Terrain) {
+    const { playerRadius, playerSpread } = config.terrain;
+    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+    let impact = 0;
+
+    for (const offset of [-playerSpread, playerSpread]) {
+      const contact = terrain.resolveCircle(this.sprite.x + offset, this.sprite.y, playerRadius);
+
+      if (!contact.hit) continue;
+
+      this.sprite.setPosition(contact.x - offset, contact.y);
+
+      const into = -(body.velocity.x * contact.normalX + body.velocity.y * contact.normalY);
+
+      if (into <= 0) continue;
+
+      body.velocity.x += contact.normalX * into;
+      body.velocity.y += contact.normalY * into;
+      impact = Math.max(impact, into);
+    }
+
+    return impact;
+  }
+
   getSprite() {
     return this.sprite;
   }
@@ -133,8 +199,9 @@ export class Player {
     this.health = Phaser.Math.Clamp(health, 0, this.healthMax);
   }
 
+  /** A lasting shield for scripted moments; the blink after a hit runs on its own flag. */
   setInvulnerable(value: boolean = true) {
-    this.isInvulnerable = value;
+    this.shielded = value;
   }
 
   isAlive() {
@@ -155,11 +222,11 @@ export class Player {
   }
 
   canInvulnerable() {
-    return this.isInvulnerable;
+    return this.isInvulnerable || this.shielded;
   }
 
   takeDamage(amount: number = 1) {
-    if (!this.alive || this.isInvulnerable) return;
+    if (!this.alive || this.canInvulnerable()) return;
 
     this.setHealth(this.health - amount);
     this.noiseField.emit(this.sprite.x, this.sprite.y, 1);

@@ -12,9 +12,15 @@ export default class WinScene extends BaseScene {
   private title!: Phaser.GameObjects.Text;
   private timeText!: Phaser.GameObjects.Text;
   private music!: Phaser.Sound.BaseSound;
+  private incomingMusic?: Phaser.Sound.BaseSound;
 
   constructor() {
     super('WinScene');
+  }
+
+  /** The final level starts the victory track during its ending and hands it over still playing. */
+  init(data: { music?: Phaser.Sound.BaseSound }) {
+    this.incomingMusic = data.music;
   }
 
   create() {
@@ -23,8 +29,12 @@ export default class WinScene extends BaseScene {
     this.gui = new GUI(this);
 
     // Kept alive on purpose: EndScene keeps playing the same track over the credits.
-    this.music = this.sound.add('victory', { volume: 0.4 });
-    this.music.play();
+    this.music = this.incomingMusic ?? this.sound.add('victory', { volume: 0.4 });
+    this.incomingMusic = undefined;
+
+    if (!this.music.isPlaying) {
+      this.music.play();
+    }
 
     this.createBackground();
     this.createUI();

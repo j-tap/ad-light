@@ -22,6 +22,8 @@ export default class StartScene extends BaseScene {
   create() {
     super.create();
 
+    // Scene instances are reused, and the buttons of the previous visit are already destroyed.
+    this.levelButtons = [];
     this.gui = new GUI(this);
 
     this.music = this.sound.add('menuMusic', { loop: true, volume: 0.5 });

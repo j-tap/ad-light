@@ -18,6 +18,14 @@ export default defineConfig({
       },
     },
   },
+  server: {
+    port: 5917,
+    strictPort: true,
+  },
+  preview: {
+    port: 5918,
+    strictPort: true,
+  },
   define: {
     __APP_VERSION__: JSON.stringify(version),
     __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production'),

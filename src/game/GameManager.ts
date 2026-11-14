@@ -7,7 +7,7 @@ import { Mollusk } from './Mollusk';
 import { NoiseField } from './systems/NoiseField';
 import { Player } from './Player';
 import { config } from '../config';
-import type { MolluskConfig, EnemyKind, EnemySpawnConfig, SpawnIndent, LevelConfig, LevelGoal } from '../config';
+import type { MolluskConfig, EnemyKind, EnemySpawnConfig, SpawnIndent, LevelConfig, LevelGoal, LevelPoint } from '../config';
 
 export enum GameState {
   Start,
@@ -18,6 +18,9 @@ export enum GameState {
 }
 
 type EnemyConstructor = new (scene: Phaser.Scene, x: number, y: number) => BaseEnemy;
+
+/** Moves a spawn point into open water; levels with solid rock provide one. */
+export type SpawnConstraint = (x: number, y: number, margin: number) => LevelPoint;
 
 const enemyConstructors: Record<EnemyKind, EnemyConstructor> = {
   anglerFish: AnglerFish,
@@ -47,7 +50,8 @@ export class GameManager {
   private damaged = false;
   private player!: Player;
   private lastLevel = '';
-  private rockDeadZones: Phaser.Geom.Rectangle[] = [];
+  private constrainSpawn: SpawnConstraint = (x, y) => ({ x, y });
+  private molluskTotal = 0;
   private levelGoal: LevelGoal = 'collect';
   private escapeFinishX = 0;
 
@@ -92,11 +96,19 @@ export class GameManager {
     this.player = player;
   }
 
-  startGame(level: LevelConfig, rockDeadZones: Phaser.Geom.Rectangle[] = []) {
+  getEnemies(): readonly BaseEnemy[] {
+    return this.enemies;
+  }
+
+  getMolluskTotal() {
+    return this.molluskTotal;
+  }
+
+  startGame(level: LevelConfig, constrainSpawn?: SpawnConstraint) {
     this.score = 0;
     this.elapsedMs = 0;
     this.damaged = false;
-    this.rockDeadZones = rockDeadZones;
+    this.constrainSpawn = constrainSpawn ?? this.constrainSpawn;
     this.levelGoal = level.goal ?? 'collect';
     this.escapeFinishX = level.escape?.finishX ?? 0;
     this.noiseField.reset();
@@ -106,9 +118,13 @@ export class GameManager {
 
     this.spawnEnemies(level.enemies, teaching ? config.tutorial.zoneWidth : 0);
 
-    if (level.mollusks.count > 0) {
+    if (level.mollusks.nests) {
+      this.spawnPlacedNests(level.mollusks);
+    } else if (level.mollusks.count > 0) {
       this.spawnMollusks(level.mollusks, teaching);
     }
+
+    this.molluskTotal = this.mollusks.length;
 
     if (teaching) {
       this.spawnTutorialAngler();
@@ -246,8 +262,15 @@ export class GameManager {
   private spawnEnemies(spawns: EnemySpawnConfig[], keepOutWidth = 0) {
     spawns.forEach(spawn => {
       const EnemyClass = enemyConstructors[spawn.kind];
+      const margin = config.terrain.enemyRadius[spawn.kind];
 
-      for (let i = 0; i < spawn.count; i++) {
+      spawn.at?.forEach(point => {
+        const { x, y } = this.constrainSpawn(point.x, point.y, margin);
+
+        this.registerEnemy(new EnemyClass(this.scene, x, y));
+      });
+
+      for (let i = 0; i < (spawn.count ?? 0); i++) {
         const { x, y } = this.findEnemySpawnPoint(spawn.indent, keepOutWidth);
 
         this.registerEnemy(new EnemyClass(this.scene, x, y));
@@ -332,6 +355,25 @@ export class GameManager {
     }
   }
 
+  private spawnPlacedNests(mollusks: MolluskConfig) {
+    const { placedRadius, wallMargin } = config.mollusk.nest;
+
+    mollusks.nests?.forEach(nest => {
+      for (let i = 0; i < nest.count; i++) {
+        // Evenly fanned around the centre, so a nest never collapses into one overlapping blob.
+        const angle = (i / nest.count) * Math.PI * 2 + nest.y;
+        const distance = nest.count === 1 ? 0 : placedRadius;
+        const { x, y } = this.constrainSpawn(
+          nest.x + Math.cos(angle) * distance,
+          nest.y + Math.sin(angle) * distance * 0.6,
+          wallMargin
+        );
+
+        this.addMollusk(x, y);
+      }
+    });
+  }
+
   /** A first trail of mollusks laid out ahead of the player, close enough to be seen at once. */
   private spawnTutorialMollusks(area: { left: number, right: number, top: number, bottom: number }) {
     const { molluskCount, molluskLead, molluskSpacing } = config.tutorial;
@@ -348,21 +390,10 @@ export class GameManager {
   private molluskArea(indent?: SpawnIndent) {
     const bounds = this.scene.physics.world.bounds;
     const { padding } = config.mollusk.nest;
-    const viewW = this.scene.scale.width;
-    const worldW = bounds.width;
-
-    let left = bounds.left + padding + (indent?.left ?? 0);
-    let right = bounds.right - padding - (indent?.right ?? 0);
-
-    if (worldW > viewW) {
-      const margin = (worldW - viewW) / 2 + padding;
-      left = Math.max(left, bounds.left + margin);
-      right = Math.min(right, bounds.right - margin);
-    }
 
     return {
-      left,
-      right,
+      left: bounds.left + padding + (indent?.left ?? 0),
+      right: bounds.right - padding - (indent?.right ?? 0),
       top: bounds.top + padding + (indent?.top ?? 0),
       bottom: bounds.bottom - padding - (indent?.bottom ?? 0),
     };
@@ -382,8 +413,6 @@ export class GameManager {
         y: Phaser.Math.Between(area.top, area.bottom),
       };
 
-      if (this.isInsideDeadZone(candidate.x, candidate.y)) continue;
-
       const distance = taken.reduce(
         (closest, point) => Math.min(closest, Phaser.Math.Distance.BetweenPoints(candidate, point)),
         Number.POSITIVE_INFINITY
@@ -398,10 +427,6 @@ export class GameManager {
     }
 
     return best;
-  }
-
-  private isInsideDeadZone(x: number, y: number): boolean {
-    return this.rockDeadZones.some(zone => zone.contains(x, y));
   }
 
   private measureThreat(playerX: number, playerY: number) {
@@ -436,9 +461,12 @@ export class GameManager {
 
     if (!mollusk) return;
 
+    const { x, y } = mollusk.getSprite();
+
     this.molluskBySprite.delete(molluskSprite as Phaser.GameObjects.GameObject);
     this.mollusks.splice(this.mollusks.indexOf(mollusk), 1);
     mollusk.destroy();
+    this.scene.events.emit('mollusk-collected', x, y);
 
     this.scene.sound.play('drip', { volume: 0.2 });
     this.player.refillLight(config.player.light.fuelPerMollusk);

@@ -4,21 +4,26 @@ import { EnemyKraken } from './enemies/Kraken';
 import { Player } from './Player';
 import { KrakenTentacleStrike, TentacleSide } from './KrakenTentacleStrike';
 
+const settings = config.tentacle.strike;
+const RETRY_MS = 500;
+
+/** Paces the arm strikes during the chase: one at a time, alternating floor and ceiling. */
 export class KrakenTentacleDirector {
   private readonly scene: Phaser.Scene;
   private readonly player: Player;
   private readonly kraken: EnemyKraken;
-  private readonly worldHeight: number;
+  private readonly worldHeight: () => number;
   private activeStrike?: KrakenTentacleStrike;
   private timer?: Phaser.Time.TimerEvent;
   private running = false;
   private lastSide: TentacleSide = 'bottom';
+  private strikes = 0;
 
   constructor(
     scene: Phaser.Scene,
     player: Player,
     kraken: EnemyKraken,
-    worldHeight: number,
+    worldHeight: () => number,
   ) {
     this.scene = scene;
     this.player = player;
@@ -30,7 +35,7 @@ export class KrakenTentacleDirector {
     if (this.running) return;
 
     this.running = true;
-    this.scheduleNext(config.tentacle.initialDelayMs);
+    this.scheduleNext(settings.initialDelayMs);
   }
 
   stop() {
@@ -40,8 +45,8 @@ export class KrakenTentacleDirector {
     this.activeStrike = undefined;
   }
 
-  update() {
-    this.activeStrike?.update(this.scene.time.now);
+  update(delta: number) {
+    this.activeStrike?.update(delta);
   }
 
   private scheduleNext(delayMs: number) {
@@ -52,41 +57,36 @@ export class KrakenTentacleDirector {
   private tryStrike() {
     if (!this.running) return;
 
-    if (this.activeStrike) {
-      this.scheduleNext(400);
-      return;
-    }
-
-    const { targetOffsetX, intervalMs, startWorldX, endWorldX } = config.tentacle;
     const playerX = this.player.getSprite().x;
 
-    if (playerX < startWorldX) {
-      this.scheduleNext(600);
-      return;
-    }
-
-    if (playerX >= endWorldX) {
+    if (playerX >= settings.endWorldX) {
       this.stop();
       return;
     }
 
-    const side: TentacleSide = this.lastSide === 'bottom' ? 'top' : 'bottom';
-    this.lastSide = side;
+    if (this.activeStrike || playerX < settings.startWorldX || !this.player.isAlive()) {
+      this.scheduleNext(RETRY_MS);
+      return;
+    }
 
-    const offsetX = Phaser.Math.Between(targetOffsetX.min, targetOffsetX.max);
+    const side: TentacleSide = this.lastSide === 'bottom' ? 'top' : 'bottom';
+
+    this.lastSide = side;
+    this.strikes++;
 
     this.activeStrike = new KrakenTentacleStrike(
       this.scene,
       side,
-      this.worldHeight,
+      this.worldHeight(),
       this.player,
       this.kraken,
-      offsetX,
+      this.strikes <= settings.hintCount,
       () => {
         this.activeStrike = undefined;
-        if (!this.running) return;
 
-        this.scheduleNext(Phaser.Math.Between(intervalMs.min, intervalMs.max));
+        if (this.running) {
+          this.scheduleNext(Phaser.Math.Between(settings.intervalMs.min, settings.intervalMs.max));
+        }
       },
     );
   }
