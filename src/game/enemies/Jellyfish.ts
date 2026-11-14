@@ -1,11 +1,10 @@
 import Phaser from 'phaser';
 import { BaseEnemy, EnemyContext } from './BaseEnemy';
 import { ensureTexture } from '../textures';
-import { config } from '../../config';
+import { config, TAU } from '../../config';
 
 const settings = config.enemy.jellyfish;
 const GLOW_TEXTURE = 'jellyGlow';
-const TAU = Math.PI * 2;
 
 /**
  * A living obstacle: it never hunts and never reacts, it just drifts and stings whatever

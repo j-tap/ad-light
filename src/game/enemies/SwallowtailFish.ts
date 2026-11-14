@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { BaseEnemy, EnemyContext } from './BaseEnemy';
-import { config } from '../../config';
+import { config, TAU } from '../../config';
 
 enum SwallowtailState {
   Patrol,
@@ -10,7 +10,6 @@ enum SwallowtailState {
 }
 
 const settings = config.enemy.swallowtail;
-const TAU = Math.PI * 2;
 
 /**
  * Blind but sharp eared: it ignores the player light entirely and strikes at the spot

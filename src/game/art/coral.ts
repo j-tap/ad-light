@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { config, CoralKind } from '../../config';
+import { config, CoralKind, TAU } from '../../config';
 import { ensureCanvasTexture } from '../textures';
 import { between, createRng, Rng } from './random';
 
@@ -114,7 +114,7 @@ function paintBranch(
 
   tips.forEach(tip => {
     context.beginPath();
-    context.arc(tip.x, tip.y, tip.radius, 0, Math.PI * 2);
+    context.arc(tip.x, tip.y, tip.radius, 0, TAU);
     context.fillStyle = palette.tip;
     context.fill();
     context.lineWidth = outlineWidth * 0.6;
@@ -160,7 +160,7 @@ function paintTubes(context: CanvasRenderingContext2D, width: number, height: nu
     context.stroke();
 
     context.beginPath();
-    context.ellipse(0, -tube.tall, half, half * 0.45, 0, 0, Math.PI * 2);
+    context.ellipse(0, -tube.tall, half, half * 0.45, 0, 0, TAU);
     context.fillStyle = palette.tip;
     context.fill();
     context.lineWidth = outlineWidth;
@@ -168,7 +168,7 @@ function paintTubes(context: CanvasRenderingContext2D, width: number, height: nu
     context.stroke();
 
     context.beginPath();
-    context.ellipse(0, -tube.tall, half * 0.5, half * 0.2, 0, 0, Math.PI * 2);
+    context.ellipse(0, -tube.tall, half * 0.5, half * 0.2, 0, 0, TAU);
     context.fillStyle = outline;
     context.fill();
 
@@ -185,7 +185,7 @@ function paintFrond(context: CanvasRenderingContext2D, width: number, height: nu
     const tall = between(rng, 0.55, 0.96) * (height - outlineWidth * 2);
     const lean = (blade - (blades - 1) / 2) * settings.frond.lean + between(rng, -10, 10);
     const wave = between(rng, 10, 20);
-    const phase = rng() * Math.PI * 2;
+    const phase = rng() * TAU;
     const half = between(rng, settings.frond.width.min, settings.frond.width.max) / 2;
     const centre = (t: number) => ({
       x: rootX + lean * t + Math.sin(t * Math.PI * 2.2 + phase) * wave * t,

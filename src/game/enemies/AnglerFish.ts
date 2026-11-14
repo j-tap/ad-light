@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { BaseEnemy, EnemyContext } from './BaseEnemy';
-import { config } from '../../config';
+import { config, TAU } from '../../config';
 
 enum AnglerState {
   Lure,
@@ -10,7 +10,6 @@ enum AnglerState {
 }
 
 const settings = config.enemy.anglerFish;
-const TAU = Math.PI * 2;
 
 /**
  * An ambush predator: it holds its post and uses the glowing lure to make the player

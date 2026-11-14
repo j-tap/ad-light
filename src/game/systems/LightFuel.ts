@@ -28,12 +28,6 @@ export class LightFuel {
     this.fuel = Phaser.Math.Clamp(this.fuel + amount, 0, settings.fuelMax);
   }
 
-  reset() {
-    this.fuel = settings.fuelStart;
-    this.dimFactor = 0;
-    this.radiusMultiplier = 1;
-  }
-
   setRadiusMultiplier(multiplier: number) {
     this.radiusMultiplier = multiplier;
   }
@@ -48,10 +42,6 @@ export class LightFuel {
 
   isEmpty() {
     return this.fuel <= 0;
-  }
-
-  isLow() {
-    return this.getRatio() <= settings.lowFuelThreshold;
   }
 
   getRadius() {

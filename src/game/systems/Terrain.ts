@@ -1,9 +1,5 @@
-import { config } from '../../config';
-
-export interface TerrainPoint {
-  x: number,
-  y: number,
-}
+import Phaser from 'phaser';
+import { config, Point } from '../../config';
 
 export interface TerrainContact {
   hit: boolean,
@@ -37,15 +33,15 @@ export class Terrain {
   private readonly contact: TerrainContact = { hit: false, x: 0, y: 0, normalX: 0, normalY: 0 };
   private stamp = 0;
 
-  /** Open water is on the right hand side when walking from the first point to the last. */
-  addPolyline(points: TerrainPoint[]) {
+  /** An open outline: water is on the right hand side when walking from the first point to the last. */
+  addPolyline(points: Point[]) {
     for (let i = 0; i < points.length - 1; i++) {
       this.addSegment(points[i], points[i + 1]);
     }
   }
 
   /** Closed solid shape, winding does not matter. */
-  addPolygon(points: TerrainPoint[]) {
+  addPolygon(points: Point[]) {
     const ordered = signedArea(points) > 0 ? points : [...points].reverse();
 
     for (let i = 0; i < ordered.length; i++) {
@@ -103,7 +99,7 @@ export class Terrain {
     const relX = contact.x - segment.ax;
     const relY = contact.y - segment.ay;
     const rawT = (relX * segment.dx + relY * segment.dy) / segment.lengthSq;
-    const t = Math.min(Math.max(rawT, 0), 1);
+    const t = Phaser.Math.Clamp(rawT, 0, 1);
     const closestX = segment.ax + segment.dx * t;
     const closestY = segment.ay + segment.dy * t;
     const offsetX = contact.x - closestX;
@@ -145,7 +141,7 @@ export class Terrain {
     return true;
   }
 
-  private addSegment(a: TerrainPoint, b: TerrainPoint) {
+  private addSegment(a: Point, b: Point) {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const lengthSq = dx * dx + dy * dy;
@@ -189,7 +185,7 @@ function cellKey(cx: number, cy: number) {
 }
 
 /** Positive for the winding whose right hand side faces outwards on a y-down screen. */
-function signedArea(points: TerrainPoint[]) {
+function signedArea(points: Point[]) {
   let area = 0;
 
   for (let i = 0; i < points.length; i++) {

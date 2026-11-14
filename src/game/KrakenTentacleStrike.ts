@@ -1,83 +1,79 @@
 import Phaser from 'phaser';
-import { config } from '../config';
+import { config, Point, TAU, TunnelSide } from '../config';
 import { EnemyKraken } from './enemies/Kraken';
 import { KrakenArm } from './KrakenArm';
 import { Player } from './Player';
 
-export type TentacleSide = 'top' | 'bottom';
+export interface StrikePlan {
+  side: TunnelSide,
+  /** The spot the arm sweeps through. */
+  aim: Point,
+  worldHeight: number,
+  /** Spells out which way to dodge. */
+  showHint: boolean,
+}
+
+export interface StrikeOutcome {
+  /** Fired the moment the arm connects. */
+  onHit: () => void,
+  /** Fired once the arm is gone, with whether it connected. */
+  onDone: (hit: boolean) => void,
+}
 
 type Phase = 'warn' | 'strike' | 'hold' | 'retract' | 'done';
 
 const settings = config.tentacle.strike;
-const WARNING_SAMPLES = 14;
-const HIT_SAMPLES = 10;
 
 /**
  * One lash of a kraken arm. The aim is fixed the moment the warning appears: the arm sweeps
- * through that spot and slams into the floor or the ceiling beyond it, so leaving the marked
- * path in time is always enough.
+ * through that spot and slams into the floor or the ceiling beyond it, so changing lane away
+ * from that side is always enough to get clear. What a hit or a dodge means for the chase is
+ * up to whoever launched the strike.
  */
 export class KrakenTentacleStrike {
   private readonly scene: Phaser.Scene;
-  private readonly side: TentacleSide;
+  private readonly plan: StrikePlan;
   private readonly player: Player;
   private readonly kraken: EnemyKraken;
-  private readonly onComplete: () => void;
+  private readonly outcome: StrikeOutcome;
   private readonly arm: KrakenArm;
   private readonly warning: Phaser.GameObjects.Graphics;
-  private readonly hint?: Phaser.GameObjects.Text;
-  private readonly aim = new Phaser.Math.Vector2();
-  private readonly end = new Phaser.Math.Vector2();
-  private readonly anchor = new Phaser.Math.Vector2();
+  private readonly markers: Array<Phaser.GameObjects.Graphics | Phaser.GameObjects.Text>;
+  private readonly root = new Phaser.Math.Vector2();
   private readonly control = new Phaser.Math.Vector2();
+  private readonly end = new Phaser.Math.Vector2();
+  private readonly curve = new Phaser.Curves.QuadraticBezier(this.root, this.control, this.end);
   private readonly point = new Phaser.Math.Vector2();
   private phase: Phase = 'warn';
   private phaseTime = 0;
   private reach = 0;
   private hit = false;
 
-  constructor(
-    scene: Phaser.Scene,
-    side: TentacleSide,
-    worldHeight: number,
-    player: Player,
-    kraken: EnemyKraken,
-    showHint: boolean,
-    onComplete: () => void,
-  ) {
+  constructor(scene: Phaser.Scene, plan: StrikePlan, player: Player, kraken: EnemyKraken, outcome: StrikeOutcome) {
+    const { warning } = settings;
+
     this.scene = scene;
-    this.side = side;
+    this.plan = plan;
     this.player = player;
     this.kraken = kraken;
-    this.onComplete = onComplete;
+    this.outcome = outcome;
 
-    const sprite = player.getSprite();
-    const velocity = (sprite.body as Phaser.Physics.Arcade.Body).velocity;
-    const lead = settings.leadMs / 1000;
-
-    this.aim.set(
-      sprite.x + velocity.x * lead,
-      Phaser.Math.Clamp(sprite.y + velocity.y * lead, settings.wallMargin, worldHeight - settings.wallMargin)
-    );
     this.end.set(
-      this.aim.x + settings.overshootX,
-      side === 'bottom' ? worldHeight - settings.wallMargin : settings.wallMargin
+      plan.aim.x + settings.overshootX,
+      plan.side === 'bottom' ? plan.worldHeight - settings.wallMargin : settings.wallMargin
     );
 
     this.arm = new KrakenArm(scene, settings.width, config.render.krakenArm);
     this.arm.setVisible(false);
-    this.arm.setFlipY(side === 'top');
+    this.arm.setFlipY(plan.side === 'top');
 
-    this.warning = scene.add.graphics().setDepth(config.render.tentacle - 0.5);
-
-    if (showHint) {
-      this.hint = this.createHint();
-    }
+    this.warning = scene.add.graphics().setDepth(config.render.tentacle);
+    this.markers = plan.showHint ? [this.warning, this.createHint()] : [this.warning];
 
     scene.tweens.add({
-      targets: [this.warning, this.hint].filter(Boolean),
-      alpha: { from: 0.45, to: 1 },
-      duration: 130,
+      targets: this.markers,
+      alpha: { from: warning.pulseFrom, to: 1 },
+      duration: warning.pulseMs,
       yoyo: true,
       repeat: -1,
     });
@@ -87,16 +83,16 @@ export class KrakenTentacleStrike {
     if (this.phase === 'done') return;
 
     this.phaseTime += delta;
-    this.updateCurve();
+    this.fitCurve();
 
     switch (this.phase) {
       case 'warn':
         this.drawWarning();
 
         if (this.phaseTime >= settings.warningMs) this.beginStrike();
-        break;
+        return;
       case 'strike':
-        this.reach = Phaser.Math.Easing.Quadratic.In(Math.min(this.phaseTime / settings.strikeMs, 1));
+        this.reach = Phaser.Math.Easing.Quadratic.In(this.progress(settings.strikeMs));
 
         if (this.phaseTime >= settings.strikeMs) this.enter('hold');
         break;
@@ -104,30 +100,28 @@ export class KrakenTentacleStrike {
         if (this.phaseTime >= settings.holdMs) this.enter('retract');
         break;
       case 'retract':
-        this.reach = 1 - Phaser.Math.Easing.Quadratic.In(Math.min(this.phaseTime / settings.retractMs, 1));
+        this.reach = 1 - Phaser.Math.Easing.Quadratic.In(this.progress(settings.retractMs));
         this.arm.setAlpha(Math.min(this.reach * 3, 1));
 
         if (this.phaseTime >= settings.retractMs) {
-          this.finish();
+          this.destroy();
+          this.outcome.onDone(this.hit);
           return;
         }
         break;
     }
 
-    if (this.phase === 'warn') return;
-
     this.shapeArm();
 
     if (!this.hit && this.phase !== 'retract' && this.touchesPlayer()) {
-      this.onPlayerHit();
+      this.strikePlayer();
     }
   }
 
   destroy() {
     this.phase = 'done';
-    this.scene.tweens.killTweensOf([this.warning, this.hint].filter(Boolean));
-    this.warning.destroy();
-    this.hint?.destroy();
+    this.scene.tweens.killTweensOf(this.markers);
+    this.markers.forEach(marker => marker.destroy());
     this.arm.destroy();
   }
 
@@ -136,56 +130,52 @@ export class KrakenTentacleStrike {
     this.phaseTime = 0;
   }
 
+  private progress(durationMs: number) {
+    return Math.min(this.phaseTime / durationMs, 1);
+  }
+
   private beginStrike() {
-    this.scene.tweens.killTweensOf([this.warning, this.hint].filter(Boolean));
-    this.warning.setVisible(false);
-    this.hint?.setVisible(false);
+    this.scene.tweens.killTweensOf(this.markers);
+    this.markers.forEach(marker => marker.setVisible(false));
     this.arm.setVisible(true);
-    this.reach = 0;
     this.enter('strike');
   }
 
   /** The body keeps moving, so the control point is refitted to pass through the aim every frame. */
-  private updateCurve() {
+  private fitCurve() {
+    const { aim } = this.plan;
     const t = settings.passAt;
     const weight = 2 * t * (1 - t);
 
-    this.kraken.getStrikeAnchor(this.side, this.anchor);
+    this.kraken.getStrikeRoot(this.plan.side, this.root);
     this.control.set(
-      (this.aim.x - (1 - t) * (1 - t) * this.anchor.x - t * t * this.end.x) / weight,
-      (this.aim.y - (1 - t) * (1 - t) * this.anchor.y - t * t * this.end.y) / weight
-    );
-  }
-
-  private curveAt(t: number, out: Phaser.Math.Vector2) {
-    const inverse = 1 - t;
-
-    return out.set(
-      inverse * inverse * this.anchor.x + 2 * inverse * t * this.control.x + t * t * this.end.x,
-      inverse * inverse * this.anchor.y + 2 * inverse * t * this.control.y + t * t * this.end.y
+      (aim.x - (1 - t) * (1 - t) * this.root.x - t * t * this.end.x) / weight,
+      (aim.y - (1 - t) * (1 - t) * this.root.y - t * t * this.end.y) / weight
     );
   }
 
   private shapeArm() {
     const wobble = this.phase === 'hold'
-      ? Math.sin((this.phaseTime / settings.wobbleMs) * Math.PI * 2) * settings.wobble
+      ? Math.sin((this.phaseTime / settings.wobbleMs) * TAU) * settings.wobble
       : 0;
 
     this.arm.shape((t, out) => {
-      this.curveAt(t * this.reach, out);
+      this.curve.getPoint(t * this.reach, out);
       out.y += wobble * Math.sin(t * Math.PI);
     });
   }
 
   private drawWarning() {
-    const { warningColor, warningWidth, warningAlpha, markerRadius } = settings;
+    const { color, width, alpha, samples, markerRadius, ringWidth, ringAlpha, fillAlpha } = settings.warning;
+    const { aim } = this.plan;
+    const closing = 1 - this.progress(settings.warningMs);
 
     this.warning.clear();
-    this.warning.lineStyle(warningWidth, warningColor, warningAlpha);
+    this.warning.lineStyle(width, color, alpha);
     this.warning.beginPath();
 
-    for (let i = 0; i <= WARNING_SAMPLES; i++) {
-      const { x, y } = this.curveAt(i / WARNING_SAMPLES, this.point);
+    for (let i = 0; i <= samples; i++) {
+      const { x, y } = this.curve.getPoint(i / samples, this.point);
 
       if (i === 0) {
         this.warning.moveTo(x, y);
@@ -195,22 +185,21 @@ export class KrakenTentacleStrike {
     }
 
     this.warning.strokePath();
-
-    const closing = 1 - Math.min(this.phaseTime / settings.warningMs, 1);
-
-    this.warning.lineStyle(4, warningColor, 0.9);
-    this.warning.strokeCircle(this.aim.x, this.aim.y, markerRadius * (1 + closing));
-    this.warning.fillStyle(warningColor, 0.25);
-    this.warning.fillCircle(this.aim.x, this.aim.y, markerRadius);
+    this.warning.lineStyle(ringWidth, color, ringAlpha);
+    this.warning.strokeCircle(aim.x, aim.y, markerRadius * (1 + closing));
+    this.warning.fillStyle(color, fillAlpha);
+    this.warning.fillCircle(aim.x, aim.y, markerRadius);
   }
 
   private createHint() {
-    const above = this.side === 'bottom';
+    const { hint, warning } = settings;
+    const { aim, side } = this.plan;
+    const above = side === 'bottom';
 
     return this.scene.add.text(
-      this.aim.x,
-      this.aim.y + (above ? -1 : 1) * (settings.markerRadius * 2 + 16),
-      above ? '↑ Swim up' : '↓ Swim down',
+      aim.x,
+      aim.y + (above ? -1 : 1) * (warning.markerRadius * 2 + hint.gap),
+      above ? hint.up : hint.down,
       {
         fontSize: '18px',
         fontFamily: 'Arial',
@@ -227,8 +216,8 @@ export class KrakenTentacleStrike {
   private touchesPlayer() {
     const sprite = this.player.getSprite();
 
-    for (let i = 1; i <= HIT_SAMPLES; i++) {
-      const { x, y } = this.curveAt((i / HIT_SAMPLES) * this.reach, this.point);
+    for (let i = 1; i <= settings.hitSamples; i++) {
+      const { x, y } = this.curve.getPoint((i / settings.hitSamples) * this.reach, this.point);
 
       if (Phaser.Math.Distance.Between(x, y, sprite.x, sprite.y) < settings.hitRadius) return true;
     }
@@ -236,19 +225,14 @@ export class KrakenTentacleStrike {
     return false;
   }
 
-  private onPlayerHit() {
+  private strikePlayer() {
     if (!this.player.isAlive()) return;
 
     this.hit = true;
-    this.scene.sound.play('eat', { volume: 0.35 });
+    this.scene.sound.play('eat', { volume: settings.hitVolume });
     this.player.takeDamage(1);
-    this.player.stun(config.rock.hitStunDuration);
-    this.kraken.applyCatchUp();
+    this.player.stun(settings.stunMs);
     this.scene.cameras.main.shake(settings.shakeMs, settings.shakeIntensity);
-  }
-
-  private finish() {
-    this.destroy();
-    this.onComplete();
+    this.outcome.onHit();
   }
 }

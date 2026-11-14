@@ -1,14 +1,15 @@
 import Phaser from 'phaser';
-import { config } from '../../config';
+import { config, TAU } from '../../config';
 import { ensureCanvasTexture } from '../textures';
 
-const { texture, paint } = config.tentacle;
+const { paint } = config.tentacle;
+const ARM_TEXTURE = 'krakenArm';
 
 /** One kraken arm drawn along the x axis, thick at the body and tapering to the tip. */
 export function ensureArmTexture(scene: Phaser.Scene) {
   const { length, thickness, tipThickness, outlineWidth, suckers } = paint;
 
-  return ensureCanvasTexture(scene, texture, length, thickness, context => {
+  return ensureCanvasTexture(scene, ARM_TEXTURE, length, thickness, context => {
     const middle = thickness / 2;
     const tipX = length - tipThickness;
     const halfAt = (x: number) => Phaser.Math.Linear(
@@ -60,7 +61,7 @@ export function ensureArmTexture(scene: Phaser.Scene) {
       const radius = half * 0.36;
 
       context.beginPath();
-      context.ellipse(x, middle + half * 0.5, radius * 1.15, radius, 0, 0, Math.PI * 2);
+      context.ellipse(x, middle + half * 0.5, radius * 1.15, radius, 0, 0, TAU);
       context.fillStyle = paint.sucker;
       context.fill();
       context.lineWidth = Math.max(outlineWidth * 0.4, 1.5);
@@ -68,7 +69,7 @@ export function ensureArmTexture(scene: Phaser.Scene) {
       context.stroke();
 
       context.beginPath();
-      context.ellipse(x, middle + half * 0.5, radius * 0.45, radius * 0.4, 0, 0, Math.PI * 2);
+      context.ellipse(x, middle + half * 0.5, radius * 0.45, radius * 0.4, 0, 0, TAU);
       context.fillStyle = paint.suckerDark;
       context.fill();
     }

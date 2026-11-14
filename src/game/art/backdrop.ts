@@ -1,19 +1,19 @@
 import Phaser from 'phaser';
-import { config } from '../../config';
+import { config, TAU } from '../../config';
 import { ensureCanvasTexture } from '../textures';
 import { between, createRng } from './random';
 
 export const TRENCH_BACKDROP = 'trenchBackdrop';
 
 const settings = config.trench.backdrop;
-const TAU = Math.PI * 2;
+const STEP = 8;
 
 /**
  * Far wall of the trench: dim rock columns that tile in both directions. Every wave uses a
  * whole number of periods per tile, which is what keeps the seams invisible.
  */
 export function ensureTrenchBackdrop(scene: Phaser.Scene) {
-  const { size, base, tones, columns, seed, specks } = settings;
+  const { size, base, tones, columns, seed, specks, waveAmplitude } = settings;
 
   return ensureCanvasTexture(scene, TRENCH_BACKDROP, size, size, context => {
     const rng = createRng(seed);
@@ -26,7 +26,7 @@ export function ensureTrenchBackdrop(scene: Phaser.Scene) {
       const width = between(rng, 0.06, 0.16) * size;
       const waves = [1, 2, 3].map(k => ({
         periods: k + Math.floor(rng() * 2),
-        amplitude: between(rng, 8, 34) / k,
+        amplitude: between(rng, waveAmplitude.min, waveAmplitude.max) / k,
         phase: rng() * TAU,
       }));
       const offsetAt = (y: number, shift: number) => waves.reduce(
@@ -40,11 +40,11 @@ export function ensureTrenchBackdrop(scene: Phaser.Scene) {
       [-size, 0, size].forEach(wrap => {
         context.beginPath();
 
-        for (let y = 0; y <= size; y += 16) {
+        for (let y = 0; y <= size; y += STEP) {
           context.lineTo(centre + wrap - width / 2 + offsetAt(y, 0), y);
         }
 
-        for (let y = size; y >= 0; y -= 16) {
+        for (let y = size; y >= 0; y -= STEP) {
           context.lineTo(centre + wrap + width / 2 + offsetAt(y, 1.3), y);
         }
 

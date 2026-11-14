@@ -1,24 +1,40 @@
 import Phaser from 'phaser';
-import { config, ShaftConfig, ShaftLedge, ShaftSide } from '../config';
-import { paintRock, Point, RockFeatures, scatterCracks } from './art/RockPainter';
-import { between, createRng } from './art/random';
+import { config, Point, ShaftConfig, ShaftLedge, ShaftSide, TAU } from '../config';
+import { paintRock, RockFeatures, scatterCracks } from './art/RockPainter';
+import { between, createRng, Rng } from './art/random';
 import { Terrain } from './systems/Terrain';
 import { ensureCanvasTexture, solidTexture } from './textures';
 
-const settings = config.trench.walls;
+const settings = config.shaft;
 const { palette } = config.rock.paint;
 const FILLER_TEXTURE = 'rockFiller';
+
+/** A crack or bedding line with its vertical extent, so chunks only paint what crosses them. */
+interface Feature {
+  points: Point[],
+  top: number,
+  bottom: number,
+}
 
 interface WallSide {
   side: ShaftSide,
   /** Water edge x for every sample row. */
   edge: Float32Array,
-  features: RockFeatures,
+  cracks: Feature[],
+  strata: Feature[],
+}
+
+interface Chunk {
+  wall: WallSide,
+  top: number,
+  key: string,
+  image?: Phaser.GameObjects.Image,
 }
 
 /**
  * The walls of a vertical shaft. Each wall is a single valued function of depth, which keeps
  * both the collision outline and the chunked artwork derivable from a few control points.
+ * The artwork is painted chunk by chunk as the camera gets near and dropped once it is far.
  */
 export class TrenchWalls {
   private readonly scene: Phaser.Scene;
@@ -27,15 +43,9 @@ export class TrenchWalls {
   private readonly rows: number;
   private readonly left: WallSide;
   private readonly right: WallSide;
+  private readonly chunks: Chunk[] = [];
 
-  constructor(
-    scene: Phaser.Scene,
-    shaft: ShaftConfig,
-    worldWidth: number,
-    worldHeight: number,
-    terrain: Terrain,
-    textureKey: string
-  ) {
+  constructor(scene: Phaser.Scene, shaft: ShaftConfig, worldWidth: number, worldHeight: number, textureKey: string) {
     this.scene = scene;
     this.worldWidth = worldWidth;
     this.worldHeight = worldHeight;
@@ -44,14 +54,40 @@ export class TrenchWalls {
     this.left = this.buildSide('left', shaft);
     this.right = this.buildSide('right', shaft);
 
+    for (let top = 0, index = 0; top < worldHeight; top += settings.chunkHeight, index++) {
+      this.chunks.push(
+        { wall: this.left, top, key: `${textureKey}-left-${index}` },
+        { wall: this.right, top, key: `${textureKey}-right-${index}` }
+      );
+    }
+
+    this.createFloor(textureKey);
+    this.createFillers();
+  }
+
+  addTo(terrain: Terrain) {
     terrain.addPolyline(this.outline(this.left, 0, this.rows - 1, settings.collisionStride));
     terrain.addPolyline(this.outline(this.right, 0, this.rows - 1, settings.collisionStride));
     terrain.addPolyline(this.floorOutline());
+  }
 
-    this.createChunks(this.left, textureKey);
-    this.createChunks(this.right, textureKey);
-    this.createFloor(textureKey);
-    this.createFillers();
+  /** Paints the chunks coming into view and frees the ones left far behind. */
+  update(camera: Phaser.Cameras.Scene2D.Camera) {
+    const { chunkHeight, chunkWindow } = settings;
+    const middle = camera.scrollY + camera.height / 2;
+    const half = camera.height / camera.zoom / 2;
+
+    for (const chunk of this.chunks) {
+      const distance = Math.max(middle - half - (chunk.top + chunkHeight), chunk.top - (middle + half), 0);
+
+      if (!chunk.image && distance <= chunkWindow.create) {
+        this.showChunk(chunk);
+      } else if (chunk.image && distance > chunkWindow.drop) {
+        chunk.image.destroy();
+        chunk.image = undefined;
+        this.scene.textures.remove(chunk.key);
+      }
+    }
   }
 
   leftAt(y: number) {
@@ -62,17 +98,11 @@ export class TrenchWalls {
     return this.sample(this.right.edge, y);
   }
 
-  centerAt(y: number) {
-    return (this.leftAt(y) + this.rightAt(y)) / 2;
-  }
-
   /** Depth at which a wall first reaches out to `x`, scanning downwards; undefined if it never does. */
   surfaceY(side: ShaftSide, x: number, from: number, to: number) {
     const edge = side === 'left' ? this.left.edge : this.right.edge;
-    const fromRow = Math.max(Math.round((from + settings.overscan) / settings.sampleStep), 0);
-    const toRow = Math.min(Math.round((to + settings.overscan) / settings.sampleStep), this.rows - 1);
 
-    for (let row = fromRow; row <= toRow; row++) {
+    for (let row = this.rowAt(from); row <= this.rowAt(to); row++) {
       if (side === 'left' ? edge[row] >= x : edge[row] <= x) {
         return this.rowY(row);
       }
@@ -101,6 +131,10 @@ export class TrenchWalls {
     return row * settings.sampleStep - settings.overscan;
   }
 
+  private rowAt(y: number) {
+    return Phaser.Math.Clamp(Math.round((y + settings.overscan) / settings.sampleStep), 0, this.rows - 1);
+  }
+
   private buildSide(side: ShaftSide, shaft: ShaftConfig): WallSide {
     const edge = new Float32Array(this.rows);
     const base = side === 'left' ? shaft.left : shaft.right;
@@ -124,35 +158,36 @@ export class TrenchWalls {
       edge[row] = side === 'left' ? inset : this.worldWidth - inset;
     }
 
-    const wall: WallSide = { side, edge, features: { cracks: [], strata: [] } };
+    const wall: WallSide = { side, edge, cracks: [], strata: [] };
     const rng = createRng(settings.seed + phase);
 
-    wall.features.cracks = scatterCracks(this.outline(wall, 0, this.rows - 1, 1), rng);
-    wall.features.strata = this.buildStrata(side, rng);
+    wall.cracks = scatterCracks(this.outline(wall, 0, this.rows - 1, 1), rng).map(toFeature);
+    wall.strata = this.buildStrata(side, rng).map(toFeature);
 
     return wall;
   }
 
-  private buildStrata(side: ShaftSide, rng: () => number) {
+  private buildStrata(side: ShaftSide, rng: Rng) {
+    const { spacing, steps, reach, tilt, wave, waveLength } = settings.strata;
     const lines: Point[][] = [];
     const direction = side === 'left' ? 1 : -1;
     const startX = side === 'left' ? -settings.outerPad : this.worldWidth + settings.outerPad;
     let y = -settings.overscan;
 
     while (y < this.worldHeight + settings.overscan) {
-      y += between(rng, settings.strataSpacing.min, settings.strataSpacing.max);
+      y += between(rng, spacing.min, spacing.max);
 
       const line: Point[] = [];
-      const tilt = between(rng, -0.08, 0.08);
-      const wave = between(rng, 6, 16);
-      const offset = rng() * Math.PI * 2;
+      const slope = between(rng, -tilt, tilt);
+      const amplitude = between(rng, wave.min, wave.max);
+      const offset = rng() * TAU;
 
-      for (let step = 0; step <= settings.strataSteps; step++) {
-        const distance = (step / settings.strataSteps) * settings.strataReach;
+      for (let step = 0; step <= steps; step++) {
+        const distance = (step / steps) * reach;
 
         line.push({
           x: startX + direction * distance,
-          y: y + distance * tilt + Math.sin(distance / 70 + offset) * wave,
+          y: y + distance * slope + Math.sin(distance / waveLength + offset) * amplitude,
         });
       }
 
@@ -177,85 +212,83 @@ export class TrenchWalls {
 
   private floorOutline(): Point[] {
     const points: Point[] = [];
-    const { floorHeight, floorWave, floorStep, outerPad } = settings;
+    const { floorHeight, floorWaves, floorStep, outerPad } = settings;
 
     for (let x = -outerPad; x <= this.worldWidth + outerPad; x += floorStep) {
       points.push({
         x,
-        y: this.worldHeight - floorHeight
-          + Math.sin(x / 83) * floorWave
-          + Math.sin(x / 31 + 1.7) * floorWave * 0.4,
+        y: floorWaves.reduce(
+          (y, [period, amplitude, phase]) => y + Math.sin(x / period + phase) * amplitude,
+          this.worldHeight - floorHeight
+        ),
       });
     }
 
     return points;
   }
 
-  private createChunks(wall: WallSide, textureKey: string) {
-    const { chunkHeight, chunkPad, sampleStep, overscan, outerPad, edgeMargin } = settings;
-    const chunks = Math.ceil(this.worldHeight / chunkHeight);
+  private showChunk(chunk: Chunk) {
+    const { chunkHeight, chunkPad, outerPad, edgeMargin } = settings;
+    const { wall, top, key } = chunk;
     const isLeft = wall.side === 'left';
+    const bottom = top + chunkHeight;
+    let reach = 0;
 
-    for (let chunk = 0; chunk < chunks; chunk++) {
-      const top = chunk * chunkHeight;
-      const fromRow = Math.max(Math.floor((top - chunkPad + overscan) / sampleStep), 0);
-      const toRow = Math.min(Math.ceil((top + chunkHeight + chunkPad + overscan) / sampleStep), this.rows - 1);
-      const edge = this.outline(wall, fromRow, toRow, 1);
-      const reach = edge.reduce(
-        (furthest, point) => Math.max(furthest, isLeft ? point.x : this.worldWidth - point.x),
-        0
-      );
-      const width = Math.ceil(reach + edgeMargin);
-      const originX = isLeft ? 0 : this.worldWidth - width;
-      const outerX = isLeft ? -outerPad : this.worldWidth + outerPad;
-      const key = `${textureKey}-${wall.side}-${chunk}`;
-
-      ensureCanvasTexture(this.scene, key, width, chunkHeight, context => {
-        context.translate(-originX, -top);
-
-        paintRock(
-          context,
-          {
-            polygon: [...edge, { x: outerX, y: edge[edge.length - 1].y }, { x: outerX, y: edge[0].y }],
-            edge,
-          },
-          wall.features,
-          { x: originX, y: top, width, height: chunkHeight },
-          createRng(settings.seed + chunk * 2 + (isLeft ? 0 : 1))
-        );
-      });
-
-      this.scene.add.image(originX, top, key)
-        .setOrigin(0)
-        .setPipeline('Light2D')
-        .setDepth(config.render.rockObstacle);
+    for (let row = this.rowAt(top); row <= this.rowAt(bottom); row++) {
+      reach = Math.max(reach, isLeft ? wall.edge[row] : this.worldWidth - wall.edge[row]);
     }
+
+    const width = Math.ceil(reach + edgeMargin);
+    const originX = isLeft ? 0 : this.worldWidth - width;
+
+    ensureCanvasTexture(this.scene, key, width, chunkHeight, context => {
+      // The outline runs past the chunk on both ends, so strokes meet cleanly at the seams.
+      const edge = this.outline(wall, this.rowAt(top - chunkPad), this.rowAt(bottom + chunkPad), 1);
+      const outerX = isLeft ? -outerPad : this.worldWidth + outerPad;
+      const crosses = (feature: Feature) => feature.bottom >= top && feature.top <= bottom;
+      const features: RockFeatures = {
+        cracks: wall.cracks.filter(crosses).map(feature => feature.points),
+        strata: wall.strata.filter(crosses).map(feature => feature.points),
+      };
+
+      context.translate(-originX, -top);
+      paintRock(
+        this.scene,
+        context,
+        {
+          polygon: [...edge, { x: outerX, y: edge[edge.length - 1].y }, { x: outerX, y: edge[0].y }],
+          edge,
+        },
+        features
+      );
+    });
+
+    chunk.image = this.scene.add.image(originX, top, key)
+      .setOrigin(0)
+      .setPipeline('Light2D')
+      .setDepth(config.render.rockObstacle);
   }
 
   private createFloor(textureKey: string) {
-    const { floorHeight, floorWave, edgeMargin } = settings;
-    const height = floorHeight + floorWave * 2 + edgeMargin;
+    const { floorHeight, floorWaves, edgeMargin, floorSeed } = settings;
+    const swell = floorWaves.reduce((sum, [, amplitude]) => sum + amplitude, 0);
+    const height = floorHeight + swell + edgeMargin;
     const top = this.worldHeight - height;
-    const edge = this.floorOutline();
     const key = `${textureKey}-floor`;
-    const rng = createRng(settings.seed + 977);
 
     ensureCanvasTexture(this.scene, key, this.worldWidth, height, context => {
-      context.translate(0, -top);
+      const edge = this.floorOutline();
+      const below = this.worldHeight + edgeMargin;
 
+      context.translate(0, -top);
       paintRock(
+        this.scene,
         context,
         {
-          polygon: [
-            ...edge,
-            { x: edge[edge.length - 1].x, y: this.worldHeight + edgeMargin },
-            { x: edge[0].x, y: this.worldHeight + edgeMargin },
-          ],
+          polygon: [...edge, { x: edge[edge.length - 1].x, y: below }, { x: edge[0].x, y: below }],
           edge,
         },
-        { cracks: scatterCracks(edge, rng), strata: [] },
-        { x: 0, y: top, width: this.worldWidth, height },
-        rng
+        { cracks: scatterCracks(edge, createRng(settings.seed + floorSeed)), strata: [] }
       );
     });
 
@@ -280,6 +313,18 @@ export class TrenchWalls {
         .setDepth(config.render.rockObstacle);
     });
   }
+}
+
+function toFeature(points: Point[]): Feature {
+  let top = Number.POSITIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
+
+  for (const point of points) {
+    top = Math.min(top, point.y);
+    bottom = Math.max(bottom, point.y);
+  }
+
+  return { points, top, bottom };
 }
 
 /** Control points are eased into each other so the wall bends instead of kinking. */

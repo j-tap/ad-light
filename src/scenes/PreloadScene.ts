@@ -67,7 +67,6 @@ export default class PreloadScene extends BaseScene {
 
     this.load.image('level3BgFar', 'assets/images/bg/level-3-bg-far.png');
     this.load.image('level3Bg', 'assets/images/bg/level-3-bg.png');
-    this.load.image('level3Fg', 'assets/images/bg/level-3-fg.png');
 
     this.load.audio('menuMusic', 'assets/audio/music/menu.mp3');
     this.load.audio('gameMusic1', 'assets/audio/music/game3.mp3');

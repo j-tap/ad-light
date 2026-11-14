@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ensureTexture } from './textures';
+import { ensureBubbleTexture } from './textures';
 
 export interface BubbleEmitterConfig {
   minDelay?: number,
@@ -8,9 +8,6 @@ export interface BubbleEmitterConfig {
   maxCount?: number,
 }
 
-const BUBBLE_TEXTURE = 'bubbleTexture';
-const BUBBLE_TEXTURE_SIZE = 32;
-
 export class BubbleEmitter {
   private readonly scene: Phaser.Scene;
   private readonly sprite?: Phaser.GameObjects.Sprite;
@@ -18,6 +15,7 @@ export class BubbleEmitter {
   private readonly maxDelay: number;
   private readonly minCount: number;
   private readonly maxCount: number;
+  private readonly texture: string;
   private readonly timer: Phaser.Time.TimerEvent;
 
   constructor(scene: Phaser.Scene, sprite?: Phaser.GameObjects.Sprite, config: BubbleEmitterConfig = {}) {
@@ -28,10 +26,7 @@ export class BubbleEmitter {
     this.minCount = config.minCount ?? 1;
     this.maxCount = config.maxCount ?? 5;
 
-    ensureTexture(scene, BUBBLE_TEXTURE, BUBBLE_TEXTURE_SIZE, BUBBLE_TEXTURE_SIZE, graphics => {
-      graphics.fillStyle(0xadd8e6, 1);
-      graphics.fillCircle(BUBBLE_TEXTURE_SIZE / 2, BUBBLE_TEXTURE_SIZE / 2, BUBBLE_TEXTURE_SIZE / 2);
-    });
+    this.texture = ensureBubbleTexture(scene);
 
     this.timer = this.scene.time.addEvent({
       delay: this.nextDelay(),
@@ -82,7 +77,7 @@ export class BubbleEmitter {
       bubbleY = this.scene.scale.height + Phaser.Math.Between(0, 100);
     }
 
-    const bubble = this.scene.add.image(bubbleX, bubbleY, BUBBLE_TEXTURE)
+    const bubble = this.scene.add.image(bubbleX, bubbleY, this.texture)
       .setDisplaySize(size, size)
       .setAlpha(0.6);
 

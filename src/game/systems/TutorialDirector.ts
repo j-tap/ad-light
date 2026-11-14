@@ -35,12 +35,12 @@ const hints: Hint[] = [
     when: context => context.molluskDistance <= context.lightRadius,
     skip: context => context.score > 0,
     until: context => context.score > 0,
-    holdMs: settings.hintHoldMs,
+    holdMs: config.hud.hintHoldMs,
   },
   {
-    text: 'Hold SHIFT to dim the light: quiet and dark keeps you unnoticed',
+    text: 'Hold SHIFT to sneak: dim, slow and silent, and hunters lose you',
     when: context => context.enemyDistance <= settings.hintEnemyDistance,
-    holdMs: settings.hintHoldMs,
+    holdMs: config.hud.hintHoldMs,
   },
   {
     text: 'ESC to pause',

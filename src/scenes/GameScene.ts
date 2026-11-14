@@ -6,6 +6,7 @@ import { GameManager } from '../game/GameManager';
 import { CameraDirector } from '../game/systems/CameraDirector';
 import { TutorialDirector } from '../game/systems/TutorialDirector';
 import { Terrain } from '../game/systems/Terrain';
+import { mixColor } from '../game/art/lighting';
 import { Hud } from '../ui/Hud';
 import { RockObstacle } from '../game/RockObstacle';
 import { TrenchWalls } from '../game/TrenchWalls';
@@ -24,14 +25,14 @@ export default class GameScene extends BaseScene {
   protected ground!: Phaser.Physics.Arcade.StaticGroup;
   protected hud!: Hud;
   protected cameraDirector!: CameraDirector;
-  protected terrain?: Terrain;
+  protected terrain!: Terrain;
   protected walls?: TrenchWalls;
-  protected currentsEnabled = true;
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
   private uiObjects: Phaser.GameObjects.GameObject[] = [];
   private tutorial?: TutorialDirector;
   private groundBody?: Phaser.Physics.Arcade.Sprite;
   private rocks: RockObstacle[] = [];
+  private readonly shownHints = new Set<string>();
   private currentMusic?: Phaser.Sound.BaseSound;
   private currentTrackIndex = 0;
   private lastDepthY = Number.NaN;
@@ -44,10 +45,10 @@ export default class GameScene extends BaseScene {
   create() {
     super.create();
 
-    this.terrain = undefined;
+    this.terrain = new Terrain();
     this.walls = undefined;
     this.rocks = [];
-    this.currentsEnabled = true;
+    this.shownHints.clear();
     this.lastDepthY = Number.NaN;
 
     this.gameManager = new GameManager(this);
@@ -76,36 +77,56 @@ export default class GameScene extends BaseScene {
     this.updateDepthPressure();
   }
 
-  update(time: number, delta: number) {
+  update(_time: number, delta: number) {
     this.levelManager.update();
+    this.walls?.update(this.cameras.main);
     this.gameManager.update(delta);
 
     if (!this.gameManager.isPlaying()) {
-      this.updateAfterGame(time, delta);
+      this.updateAfterGame(delta);
       return;
     }
 
-    this.player.update(time, delta);
+    this.player.update(delta);
     this.applyCurrent(delta);
     this.updateDepthPressure();
-    this.cameraDirector.update(delta, this.gameManager.getThreat());
+    this.cameraDirector.update(delta, this.threatLevel());
     this.tutorial?.update(delta);
     this.updateUI();
   }
 
-  /** Level-specific response to ramming a rock (stun, hints, kraken boost). */
+  /** Level scenery that takes part in the collision; built before the terrain is first assembled. */
+  protected createScenery() {}
+
+  /** Solid rock a level adds on top of its walls and spikes; called again on every rebuild. */
+  protected buildTerrain(_terrain: Terrain, _worldHeight: number) {}
+
+  /** What a level adds to ramming a spike, on top of the stun every spike gives. */
   protected onRockHit() {}
 
   /** Runs instead of the gameplay update once the level is decided; scripted endings live here. */
-  protected updateAfterGame(_time: number, _delta: number) {}
+  protected updateAfterGame(_delta: number) {}
 
   /** Replaces the mollusk counter with a level specific objective line. */
   protected goalLabel(): string | undefined {
     return undefined;
   }
 
+  /** 0..1 pressure on the player, which the camera turns into its chase zoom. */
+  protected threatLevel() {
+    return this.gameManager.getThreat();
+  }
+
+  /** How long the result stays on screen before the next scene. */
+  protected exitDelayMs() {
+    return config.records.resultToastMs;
+  }
+
+  /** Called after a resize once the shared layout is done. */
+  protected onLayout() {}
+
   protected createLevel() {
-    const { textures, plankton, currentZones } = this.levelConfig;
+    const { textures, currentZones, rocks, shaft } = this.levelConfig;
     const { width, height } = this.worldSize();
 
     this.physics.world.gravity.y = config.world.gravityY;
@@ -113,14 +134,16 @@ export default class GameScene extends BaseScene {
     this.physics.world.drawDebug = false;
     this.physics.world.debugGraphic?.destroy();
 
-    this.levelManager.createLevel({
-      textures,
-      plankton: plankton !== false,
-      vertical: this.isVertical(),
-      currentZones,
-    });
+    this.levelManager.createLevel({ textures, vertical: this.isVertical(), currentZones });
     this.createGround();
-    this.createTerrain();
+
+    if (shaft) {
+      this.walls = new TrenchWalls(this, shaft, width, height, this.scene.key);
+    }
+
+    this.rocks = (rocks ?? []).map((def, index) => new RockObstacle(this, def, index));
+    this.createScenery();
+    this.rebuildTerrain();
 
     this.player = new Player(this, this.gameManager.getNoiseField(), this.playerSpawn());
 
@@ -145,6 +168,23 @@ export default class GameScene extends BaseScene {
     return levelWorldSize(this.levelConfig, this.scale.height);
   }
 
+  /**
+   * All solid rock is assembled in one place, from scratch: the walls, the spikes, which are
+   * sized from the viewport, and whatever the level adds. A resize or a change in the level's
+   * own rock is therefore just another rebuild.
+   */
+  protected rebuildTerrain() {
+    const { height } = this.worldSize();
+
+    this.terrain.clear();
+    this.walls?.addTo(this.terrain);
+    this.rocks.forEach(rock => {
+      rock.layout(height);
+      this.terrain.addPolygon(rock.getCollider());
+    });
+    this.buildTerrain(this.terrain, height);
+  }
+
   /** Interface elements created after the HUD have to be registered to stay out of the world camera. */
   protected addToUi(objects: Phaser.GameObjects.GameObject[]) {
     objects.forEach(object => {
@@ -153,6 +193,18 @@ export default class GameScene extends BaseScene {
     });
 
     this.uiObjects.push(...objects);
+  }
+
+  protected showHint(text: string) {
+    this.hud.showTimedHint(text);
+  }
+
+  /** For hints tied to something that can happen again: the second time it stays quiet. */
+  protected showHintOnce(text: string) {
+    if (this.shownHints.has(text)) return;
+
+    this.shownHints.add(text);
+    this.showHint(text);
   }
 
   protected stopMusic(fadeMs: number) {
@@ -195,14 +247,14 @@ export default class GameScene extends BaseScene {
     const to = profile[next];
     const t = (y - from.y) / (to.y - from.y);
 
-    this.lights.setAmbientColor(this.lerpColor(from.ambient, to.ambient, t));
+    this.lights.setAmbientColor(mixColor(from.ambient, to.ambient, t));
     this.player.setLightDrainMultiplier(Phaser.Math.Linear(from.drain, to.drain, t));
   }
 
   /** Saves the result, shows it and moves on; scripted endings override the last step. */
   protected completeLevel() {
     this.showLevelResult();
-    this.time.delayedCall(config.records.resultToastMs, () => this.fadeToScene(nextLevelScene(this.scene.key)));
+    this.time.delayedCall(this.exitDelayMs(), () => this.fadeToScene(nextLevelScene(this.scene.key)));
   }
 
   protected showLevelResult() {
@@ -228,56 +280,23 @@ export default class GameScene extends BaseScene {
     this.hud.showResult(lines.join('\n'));
   }
 
-  private createTerrain() {
-    const { rocks, shaft } = this.levelConfig;
-
-    if (!rocks?.length && !shaft) return;
-
-    const { width, height } = this.worldSize();
-
-    this.terrain = new Terrain();
-
-    if (shaft) {
-      this.walls = new TrenchWalls(this, shaft, width, height, this.terrain, this.scene.key);
-    }
-
-    this.rocks = (rocks ?? []).map((def, index) => new RockObstacle(this, def, index));
-    this.layoutRocks();
-  }
-
-  private layoutRocks() {
-    if (!this.rocks.length || !this.terrain) return;
-
-    const { height } = this.worldSize();
-
-    this.terrain.clear();
-    this.rocks.forEach(rock => {
-      rock.layout(height);
-      this.terrain?.addPolygon(rock.getCollider());
-    });
-  }
-
   /**
    * Runs after arcade has written the new positions to the sprites, so pushing a sprite out of
    * rock here is what the next physics step starts from.
    */
   private resolveTerrain() {
-    const terrain = this.terrain;
+    this.gameManager.getEnemies().forEach(enemy => enemy.resolveTerrain(this.terrain));
 
-    if (!terrain) return;
+    if (!this.player.isAlive() || this.player.isScripted()) return;
 
-    this.gameManager.getEnemies().forEach(enemy => enemy.resolveTerrain(terrain));
-
-    if (!this.player.isAlive() || !this.player.isSolid()) return;
-
-    const impact = this.player.resolveTerrain(terrain);
+    const impact = this.player.resolveTerrain(this.terrain);
 
     if (impact < config.rock.hitSpeed || !this.gameManager.isPlaying()) return;
 
     const { x } = this.player.getSprite();
-    const rock = this.rocks.find(candidate => candidate.containsX(x, config.terrain.playerSpread * 3));
 
-    if (rock?.registerHit()) {
+    if (this.rocks.find(rock => rock.isNear(x))?.registerHit()) {
+      this.player.stun(config.rock.hitStunDuration);
       this.onRockHit();
     }
   }
@@ -287,9 +306,7 @@ export default class GameScene extends BaseScene {
   }
 
   private playerSpawn() {
-    const { height } = this.worldSize();
-
-    return this.levelConfig.spawn ?? { x: this.scale.width / 2, y: height / 2 };
+    return this.levelConfig.spawn ?? { x: this.scale.width / 2, y: this.worldSize().height / 2 };
   }
 
   private createCamera() {
@@ -431,7 +448,7 @@ export default class GameScene extends BaseScene {
     this.applyCameraBounds();
 
     this.layoutGround();
-    this.layoutRocks();
+    this.rebuildTerrain();
     this.levelManager.resize();
     this.hud.layout();
     this.cameraDirector.layout();
@@ -439,17 +456,11 @@ export default class GameScene extends BaseScene {
     this.onLayout();
   }
 
-  /** Called after a resize once the shared layout is done. */
-  protected onLayout() {}
-
   /** Currents carry the fish at a fixed water speed, whatever it is doing itself. */
   private applyCurrent(delta: number) {
-    const zones = this.levelConfig.currentZones;
-
-    if (!zones?.length || !this.currentsEnabled) return;
-
     const sprite = this.player.getSprite();
-    const zone = zones.find(entry => sprite.y >= entry.y && sprite.y < entry.y + entry.height);
+    const zone = this.levelConfig.currentZones
+      ?.find(entry => sprite.y >= entry.y && sprite.y < entry.y + entry.height);
 
     if (!zone) return;
 
@@ -457,14 +468,6 @@ export default class GameScene extends BaseScene {
 
     sprite.x += (zone.forceX ?? 0) * seconds;
     sprite.y += (zone.forceY ?? 0) * seconds;
-  }
-
-  private lerpColor(from: number, to: number, t: number) {
-    const a = Phaser.Display.Color.IntegerToColor(from);
-    const b = Phaser.Display.Color.IntegerToColor(to);
-    const mixed = Phaser.Display.Color.Interpolate.ColorWithColor(a, b, 100, t * 100);
-
-    return Phaser.Display.Color.GetColor(mixed.r, mixed.g, mixed.b);
   }
 
   private updateUI() {
@@ -478,6 +481,7 @@ export default class GameScene extends BaseScene {
 
     this.hud.setHealth(this.player.getHealth());
     this.hud.setLight(this.player.getLightRatio());
+    this.hud.setSneaking(this.player.isSneaking());
     this.hud.setTime(this.gameManager.getElapsed());
   }
 }

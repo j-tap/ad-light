@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { config } from '../config';
 import { formatTime } from '../game/ProgressStore';
+import { mixColor } from '../game/art/lighting';
 
 const DEPTH = 100;
 const MARGIN = 20;
@@ -15,6 +16,7 @@ const LIGHT_COLOR_LOW = 0xff6a4a;
 const HINT_BOTTOM_MARGIN = 70;
 const TIMER_TOP = 24;
 const TITLE_Y_RATIO = 0.3;
+const SNEAK_LABEL_GAP = 12;
 
 export class Hud {
   private readonly scene: Phaser.Scene;
@@ -26,6 +28,7 @@ export class Hud {
   private readonly timerText: Phaser.GameObjects.Text;
   private readonly resultText: Phaser.GameObjects.Text;
   private readonly titleText: Phaser.GameObjects.Text;
+  private readonly sneakText: Phaser.GameObjects.Text;
   private lightBlinkTween?: Phaser.Tweens.Tween;
   private lastCollected = -1;
   private lastTotal = -1;
@@ -94,6 +97,15 @@ export class Hud {
       .setOrigin(0.5)
       .setAlpha(0);
 
+    this.sneakText = this.scene.add
+      .text(0, 0, 'sneaking: unseen, unheard', {
+        fontSize: '14px',
+        color: '#9fd8ff',
+        fontFamily: 'Arial',
+      })
+      .setOrigin(0, 0.5)
+      .setVisible(false);
+
     this.getElements().forEach(element => {
       element.setScrollFactor(0);
       element.setDepth(DEPTH);
@@ -109,7 +121,7 @@ export class Hud {
 
     this.lastLightRatio = ratio;
     this.lightFill.setScale(Math.max(ratio, 0), 1);
-    this.lightFill.setFillStyle(this.lightColor(ratio));
+    this.lightFill.setFillStyle(mixColor(LIGHT_COLOR_LOW, LIGHT_COLOR_FULL, ratio));
 
     if (this.isLowRatio(ratio) !== wasLow) {
       this.toggleLightBlink(this.isLowRatio(ratio));
@@ -129,6 +141,11 @@ export class Hud {
 
     this.molluskText.setVisible(true);
     this.molluskText.setText(`Mollusks: ${collected}/${total}`);
+  }
+
+  /** Spells out what holding the sneak key is doing, right next to the light it dims. */
+  setSneaking(sneaking: boolean) {
+    this.sneakText.setVisible(sneaking);
   }
 
   setGoalLabel(text: string) {
@@ -156,10 +173,11 @@ export class Hud {
 
   /** Hides the gameplay readouts for scripted endings; hints and results stay available. */
   hideGameplay() {
+    this.sneakText.setVisible(false);
     this.scene.tweens.add({
       targets: [this.molluskText, ...this.hearts, this.lightFrame, this.lightFill, this.timerText],
       alpha: 0,
-      duration: config.tutorial.fadeMs,
+      duration: config.hud.fadeMs,
     });
     this.lightBlinkTween?.stop();
     this.lightBlinkTween = undefined;
@@ -179,6 +197,7 @@ export class Hud {
     });
     this.lightFrame.setPosition(MARGIN, LIGHT_BAR_Y);
     this.lightFill.setPosition(MARGIN, LIGHT_BAR_Y);
+    this.sneakText.setPosition(MARGIN + LIGHT_BAR_WIDTH + SNEAK_LABEL_GAP, LIGHT_BAR_Y);
     this.hintText.setPosition(
       this.scene.scale.width / 2,
       this.scene.scale.height - HINT_BOTTOM_MARGIN
@@ -198,40 +217,16 @@ export class Hud {
   }
 
   showResult(text: string) {
-    this.resultText.setText(text);
-    this.scene.tweens.killTweensOf(this.resultText);
-    this.resultText.setAlpha(0);
-    this.scene.tweens.add({
-      targets: this.resultText,
-      alpha: 1,
-      duration: config.tutorial.fadeMs,
-      ease: 'Quad.easeOut',
-    });
+    this.resultText.setText(text).setAlpha(0);
+    this.fade(this.resultText, 1);
   }
 
   hideResult() {
-    this.scene.tweens.killTweensOf(this.resultText);
-    this.scene.tweens.add({
-      targets: this.resultText,
-      alpha: 0,
-      duration: config.tutorial.fadeMs,
-      ease: 'Quad.easeOut',
-    });
+    this.fade(this.resultText, 0);
   }
 
   private isLowRatio(ratio: number) {
     return ratio >= 0 && ratio <= config.player.light.lowFuelThreshold;
-  }
-
-  private lightColor(ratio: number) {
-    const color = Phaser.Display.Color.Interpolate.ColorWithColor(
-      Phaser.Display.Color.ValueToColor(LIGHT_COLOR_LOW),
-      Phaser.Display.Color.ValueToColor(LIGHT_COLOR_FULL),
-      100,
-      ratio * 100
-    );
-
-    return Phaser.Display.Color.GetColor(color.r, color.g, color.b);
   }
 
   private toggleLightBlink(active: boolean) {
@@ -254,11 +249,11 @@ export class Hud {
 
   setHint(text: string) {
     this.hintText.setText(text);
-    this.fadeHint(1);
+    this.fade(this.hintText, 1);
   }
 
   clearHint() {
-    this.fadeHint(0);
+    this.fade(this.hintText, 0);
   }
 
   /** Clears a timed hint only if nothing newer has replaced it meanwhile. */
@@ -268,12 +263,18 @@ export class Hud {
     }
   }
 
-  private fadeHint(alpha: number) {
-    this.scene.tweens.killTweensOf(this.hintText);
+  /** A hint that takes itself down again, unless a newer one has replaced it meanwhile. */
+  showTimedHint(text: string) {
+    this.setHint(text);
+    this.scene.time.delayedCall(config.hud.hintHoldMs, () => this.clearHintIf(text));
+  }
+
+  private fade(text: Phaser.GameObjects.Text, alpha: number) {
+    this.scene.tweens.killTweensOf(text);
     this.scene.tweens.add({
-      targets: this.hintText,
+      targets: text,
       alpha,
-      duration: config.tutorial.fadeMs,
+      duration: config.hud.fadeMs,
       ease: 'Quad.easeOut',
     });
   }
@@ -288,6 +289,7 @@ export class Hud {
       this.timerText,
       this.resultText,
       this.titleText,
+      this.sneakText,
     ];
   }
 }

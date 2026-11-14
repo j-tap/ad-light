@@ -6,8 +6,8 @@ import { Jellyfish } from './enemies/Jellyfish';
 import { Mollusk } from './Mollusk';
 import { NoiseField } from './systems/NoiseField';
 import { Player } from './Player';
-import { config } from '../config';
-import type { MolluskConfig, EnemyKind, EnemySpawnConfig, SpawnIndent, LevelConfig, LevelGoal, LevelPoint } from '../config';
+import { config, TAU } from '../config';
+import type { EnemyKind, EnemySpawnConfig, SpawnIndent, LevelConfig, LevelGoal, MolluskNest, Point } from '../config';
 
 export enum GameState {
   Start,
@@ -20,7 +20,7 @@ export enum GameState {
 type EnemyConstructor = new (scene: Phaser.Scene, x: number, y: number) => BaseEnemy;
 
 /** Moves a spawn point into open water; levels with solid rock provide one. */
-export type SpawnConstraint = (x: number, y: number, margin: number) => LevelPoint;
+export type SpawnConstraint = (x: number, y: number, margin: number) => Point;
 
 const enemyConstructors: Record<EnemyKind, EnemyConstructor> = {
   anglerFish: AnglerFish,
@@ -52,8 +52,7 @@ export class GameManager {
   private lastLevel = '';
   private constrainSpawn: SpawnConstraint = (x, y) => ({ x, y });
   private molluskTotal = 0;
-  private levelGoal: LevelGoal = 'collect';
-  private escapeFinishX = 0;
+  private goal: LevelGoal = { type: 'collect' };
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -109,19 +108,17 @@ export class GameManager {
     this.elapsedMs = 0;
     this.damaged = false;
     this.constrainSpawn = constrainSpawn ?? this.constrainSpawn;
-    this.levelGoal = level.goal ?? 'collect';
-    this.escapeFinishX = level.escape?.finishX ?? 0;
+    this.goal = level.goal;
     this.noiseField.reset();
-    this.player.setInvulnerable(false);
 
     const teaching = level.tutorial === true;
 
     this.spawnEnemies(level.enemies, teaching ? config.tutorial.zoneWidth : 0);
 
-    if (level.mollusks.nests) {
-      this.spawnPlacedNests(level.mollusks);
-    } else if (level.mollusks.count > 0) {
-      this.spawnMollusks(level.mollusks, teaching);
+    if ('nests' in level.mollusks) {
+      this.spawnPlacedNests(level.mollusks.nests);
+    } else {
+      this.spawnMollusks(level.mollusks.count, teaching);
     }
 
     this.molluskTotal = this.mollusks.length;
@@ -201,18 +198,9 @@ export class GameManager {
     this.mollusks.forEach(mollusk => mollusk.update(delta, playerSprite.x, playerSprite.y));
     this.threat = this.measureThreat(playerSprite.x, playerSprite.y);
 
-    if (this.levelGoal === 'collect' && this.mollusks.length === 0) {
-      this.winGame();
-      return;
-    }
-
-    if (this.levelGoal === 'escape' && playerSprite.x >= this.escapeFinishX) {
+    if (this.isGoalMet(playerSprite.x, playerSprite.y)) {
       this.winGame();
     }
-  }
-
-  getLevelGoal(): LevelGoal {
-    return this.levelGoal;
   }
 
   setupCollisions(player: Player) {
@@ -238,6 +226,14 @@ export class GameManager {
     return this.lastLevel;
   }
 
+  private isGoalMet(playerX: number, playerY: number) {
+    const goal = this.goal;
+
+    if (goal.type === 'collect') return this.mollusks.length === 0;
+
+    return playerX >= (goal.x ?? Number.NEGATIVE_INFINITY) && playerY <= (goal.y ?? Number.POSITIVE_INFINITY);
+  }
+
   private createPhysicsGroup() {
     return this.scene.physics.add.group({
       allowGravity: false,
@@ -253,7 +249,7 @@ export class GameManager {
   }
 
   private damagePlayer() {
-    if (!this.player.isAlive() || this.player.canInvulnerable()) return;
+    if (!this.player.isAlive() || this.player.isImmune()) return;
 
     this.scene.sound.play('eat', { volume: 0.5 });
     this.player.takeDamage(1);
@@ -324,9 +320,9 @@ export class GameManager {
   }
 
   /** Mollusks come in nests, so the player has to commit to a spot instead of grazing evenly. */
-  private spawnMollusks(mollusks: MolluskConfig, teaching = false) {
+  private spawnMollusks(count: number, teaching = false) {
     const { nest } = config.mollusk;
-    const area = this.molluskArea(mollusks.indent);
+    const area = this.molluskArea();
     const centers: Phaser.Types.Math.Vector2Like[] = [];
 
     if (teaching) {
@@ -334,17 +330,17 @@ export class GameManager {
       area.left = Math.max(area.left, config.tutorial.zoneWidth);
     }
 
-    while (this.mollusks.length < mollusks.count) {
+    while (this.mollusks.length < count) {
       const center = this.findNestCenter(area, centers);
       const size = Math.min(
         Phaser.Math.Between(nest.size.min, nest.size.max),
-        mollusks.count - this.mollusks.length
+        count - this.mollusks.length
       );
 
       centers.push(center);
 
       for (let i = 0; i < size; i++) {
-        const angle = Math.random() * Math.PI * 2;
+        const angle = Math.random() * TAU;
         const distance = Math.sqrt(Math.random()) * nest.radius;
 
         this.addMollusk(
@@ -355,17 +351,17 @@ export class GameManager {
     }
   }
 
-  private spawnPlacedNests(mollusks: MolluskConfig) {
-    const { placedRadius, wallMargin } = config.mollusk.nest;
+  private spawnPlacedNests(nests: MolluskNest[]) {
+    const { placedRadius, placedSquash, wallMargin } = config.mollusk.nest;
 
-    mollusks.nests?.forEach(nest => {
+    nests.forEach(nest => {
       for (let i = 0; i < nest.count; i++) {
         // Evenly fanned around the centre, so a nest never collapses into one overlapping blob.
-        const angle = (i / nest.count) * Math.PI * 2 + nest.y;
+        const angle = (i / nest.count) * TAU + nest.y;
         const distance = nest.count === 1 ? 0 : placedRadius;
         const { x, y } = this.constrainSpawn(
           nest.x + Math.cos(angle) * distance,
-          nest.y + Math.sin(angle) * distance * 0.6,
+          nest.y + Math.sin(angle) * distance * placedSquash,
           wallMargin
         );
 
@@ -387,15 +383,15 @@ export class GameManager {
     }
   }
 
-  private molluskArea(indent?: SpawnIndent) {
+  private molluskArea() {
     const bounds = this.scene.physics.world.bounds;
     const { padding } = config.mollusk.nest;
 
     return {
-      left: bounds.left + padding + (indent?.left ?? 0),
-      right: bounds.right - padding - (indent?.right ?? 0),
-      top: bounds.top + padding + (indent?.top ?? 0),
-      bottom: bounds.bottom - padding - (indent?.bottom ?? 0),
+      left: bounds.left + padding,
+      right: bounds.right - padding,
+      top: bounds.top + padding,
+      bottom: bounds.bottom - padding,
     };
   }
 

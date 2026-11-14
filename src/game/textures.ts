@@ -4,10 +4,10 @@ import Phaser from 'phaser';
  * Textures are shared game-wide, so generated ones are created only on first request
  * and reused by every scene afterwards.
  */
-export const EMPTY_TEXTURE = 'emptyTexture';
-export const SOFT_GLOW = 'softGlow';
-
+const SOFT_GLOW = 'softGlow';
 const SOFT_GLOW_SIZE = 128;
+const BUBBLE = 'bubbleTexture';
+const BUBBLE_SIZE = 32;
 
 export function ensureTexture(
   scene: Phaser.Scene,
@@ -51,10 +51,17 @@ export function ensureCanvasTexture(
   return key;
 }
 
-export function ensureEmptyTexture(scene: Phaser.Scene) {
-  return ensureTexture(scene, EMPTY_TEXTURE, 4, 4, graphics => {
-    graphics.fillStyle(0x000000, 0);
-    graphics.fillRect(0, 0, 4, 4);
+export function solidTexture(scene: Phaser.Scene, key: string, color: string) {
+  return ensureCanvasTexture(scene, key, 4, 4, context => {
+    context.fillStyle = color;
+    context.fillRect(0, 0, 4, 4);
+  });
+}
+
+export function ensureBubbleTexture(scene: Phaser.Scene) {
+  return ensureTexture(scene, BUBBLE, BUBBLE_SIZE, BUBBLE_SIZE, graphics => {
+    graphics.fillStyle(0xadd8e6, 1);
+    graphics.fillCircle(BUBBLE_SIZE / 2, BUBBLE_SIZE / 2, BUBBLE_SIZE / 2);
   });
 }
 
@@ -73,9 +80,9 @@ export function ensureSoftGlow(scene: Phaser.Scene) {
   });
 }
 
-export function solidTexture(scene: Phaser.Scene, key: string, color: string) {
-  return ensureCanvasTexture(scene, key, 4, 4, context => {
-    context.fillStyle = color;
-    context.fillRect(0, 0, 4, 4);
-  });
+/** A glow that lights itself: it ignores the scene lights, so it stays visible in the dark. */
+export function addSoftGlow(scene: Phaser.Scene, x: number, y: number, color: number) {
+  return scene.add.image(x, y, ensureSoftGlow(scene))
+    .setTint(color)
+    .setBlendMode(Phaser.BlendModes.ADD);
 }

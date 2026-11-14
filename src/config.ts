@@ -9,7 +9,8 @@ export interface SpawnIndent {
   right?: number,
 }
 
-export interface LevelPoint {
+/** The one point type shared by level data, collision outlines and generated artwork. */
+export interface Point {
   x: number,
   y: number,
 }
@@ -20,24 +21,20 @@ export interface EnemySpawnConfig {
   count?: number,
   indent?: SpawnIndent,
   /** Hand placed spawns, used where the level geometry leaves no room for chance. */
-  at?: LevelPoint[],
+  at?: Point[],
 }
 
-export interface MolluskNest extends LevelPoint {
+export interface MolluskNest extends Point {
   count: number,
 }
 
-export interface MolluskConfig {
-  count: number,
-  indent?: SpawnIndent,
-  /** Hand placed nests; `count` then only describes the total for the interface. */
-  nests?: MolluskNest[],
-}
+/** Either a number of mollusks scattered in random nests, or the nests placed by hand. */
+export type MolluskConfig = { count: number } | { nests: MolluskNest[] };
 
 export interface LevelTextures {
   backgroundFar: string,
-  background: string,
-  foreground: string,
+  background?: string,
+  foreground?: string,
 }
 
 export type LevelOrientation = 'horizontal' | 'vertical';
@@ -57,12 +54,12 @@ export interface CurrentZone {
   forceY?: number,
 }
 
-export type RockSide = 'top' | 'bottom';
+export type TunnelSide = 'top' | 'bottom';
 
 export interface RockObstacleDef {
   x: number,
   width: number,
-  side: RockSide,
+  side: TunnelSide,
 }
 
 export type ShaftSide = 'left' | 'right';
@@ -112,11 +109,11 @@ export interface LevelLighting {
   radiusMultiplier?: number,
 }
 
-export interface EscapeConfig {
-  finishX: number,
-}
-
-export type LevelGoal = 'collect' | 'escape' | 'descend';
+/**
+ * How a level is won: by eating every mollusk, or by getting somewhere. A `reach` goal is met
+ * once the fish is at or past `x` and at or above `y`, whichever of the two are given.
+ */
+export type LevelGoal = { type: 'collect' } | { type: 'reach', x?: number, y?: number };
 
 export interface LevelConfig {
   width: number,
@@ -126,10 +123,8 @@ export interface LevelConfig {
   textures: LevelTextures,
   enemies: EnemySpawnConfig[],
   mollusks: MolluskConfig,
-  goal?: LevelGoal,
-  escape?: EscapeConfig,
+  goal: LevelGoal,
   lighting?: LevelLighting,
-  plankton?: boolean,
   /** Turns the level opening into a scripted teaching zone. */
   tutorial?: boolean,
   /** Shown once as the level opens. */
@@ -138,12 +133,14 @@ export interface LevelConfig {
   currentZones?: CurrentZone[],
   rocks?: RockObstacleDef[],
   shaft?: ShaftConfig,
-  spawn?: LevelPoint,
-  /** Kraken tentacle sweeps during the chase segment. */
-  tentacleAttacks?: boolean,
+  spawn?: Point,
 }
 
 export const VERSION = __APP_VERSION__;
+
+/** Per-frame factors are tuned for 30 FPS and scaled by `delta / REFERENCE_FRAME_MS`. */
+export const REFERENCE_FRAME_MS = 1000 / 30;
+export const TAU = Math.PI * 2;
 
 export const levelOrder = [1, 2, 3, 4];
 
@@ -194,6 +191,8 @@ export const config = {
   player: {
     maxHealth: 3,
     speed: 260,
+    /** Swimming speed while sneaking; the dimmed light itself is described under `light`. */
+    sneakSpeedFactor: 0.5,
     movingThreshold: 79,
     light: {
       fuelMax: 100,
@@ -280,9 +279,7 @@ export const config = {
     anglerY: 240,
     firstHintDelayMs: 2200,
     hintEnemyDistance: 380,
-    hintHoldMs: 5500,
     escHintMs: 2500,
-    fadeMs: 400,
   },
   camera: {
     zoomBase: 1,
@@ -306,6 +303,8 @@ export const config = {
       size: { min: 2, max: 4 },
       radius: 130,
       placedRadius: 60,
+      /** Placed nests are flatter than they are wide. */
+      placedSquash: 0.6,
       wallMargin: 60,
       spacing: 700,
       padding: 100,
@@ -353,6 +352,9 @@ export const config = {
       crackSpacing: { min: 130, max: 300 },
       crackLength: { min: 40, max: 120 },
       crackBend: 0.55,
+      grainTile: 192,
+      /** Bedding lines across a free standing rock, as spacing and slope ranges. */
+      strata: { first: { min: 40, max: 110 }, spacing: { min: 80, max: 150 }, tilt: 0.1, jitter: 8 },
     },
     obstacle: {
       variants: 4,
@@ -369,13 +371,12 @@ export const config = {
       colliderInset: 0.88,
     },
     hitSpeed: 110,
+    /** A ram counts against the spike within this distance of the fish. */
+    hitMargin: 72,
     hitShakeDuration: 180,
     hitShakeIntensity: 4,
     hitCooldownMs: 700,
     hitStunDuration: 320,
-    krakenCatchUpMultiplier: 2.8,
-    krakenCatchUpDuration: 900,
-    krakenSurgeDistance: 90,
   },
   chase: {
     krakenSpawnX: -2000,
@@ -386,12 +387,92 @@ export const config = {
     rumbleEveryMs: 2000,
     rumbleMs: 350,
     rumbleIntensity: 0.003,
+    /**
+     * The kraken holds a distance behind the fish rather than a speed. It creeps closer on its
+     * own, every mistake lets it close in and every dodged arm throws it back, so the gap on
+     * screen is a running score of how well the escape is going.
+     */
+    gap: {
+      start: 380,
+      min: 130,
+      max: 540,
+      /** A penalty never closes the gap past this: the jaws are at the tail, one stumble from shut. */
+      danger: 36,
+      creepPerSecond: 18,
+      recoverPerSecond: 28,
+      dodgeReward: 105,
+      hitPenalty: 160,
+      rockPenalty: 120,
+      /** How hard the kraken corrects towards the gap it wants, in px/s per px of error. */
+      gain: 2.2,
+      maxClosing: 420,
+      maxFallBack: 150,
+    },
+    /** Now and then the kraken throws itself forward, whatever the fish is doing. */
+    surge: {
+      everyMs: { min: 7000, max: 11000 },
+      distance: 110,
+      shakeMs: 500,
+      shakeIntensity: 0.008,
+      volume: 0.25,
+      rate: 1.6,
+    },
+    /** Pacing of the arm strikes along the tunnel; a single lash is described under `tentacle.strike`. */
+    strikes: {
+      initialDelayMs: 2600,
+      retryMs: 400,
+      maxActive: 2,
+      /** Time between strikes: the closer the kraken, the faster they come. */
+      intervalMs: { near: { min: 1300, max: 1800 }, far: { min: 2200, max: 2900 } },
+      /** Deeper into the tunnel a strike is often followed by a second one. */
+      pair: { fromWorldX: 4000, chance: 0.7, delayMs: 720 },
+      startWorldX: 1500,
+      endWorldX: 11000,
+      /** The aim is where the fish will be when the arm lands if it simply keeps its lane. */
+      leadMs: 700,
+      /** No strike is aimed this close before or after a rock spike. */
+      rockClearance: { before: 240, after: 260 },
+      /** The first strikes spell out which way to dodge. */
+      hintCount: 2,
+    },
+    hints: {
+      hunt: 'Outrun the kraken: every arm you dodge throws it back',
+      rock: 'The rocks are solid: weave around them',
+      refuge: 'A crack in the rock ahead: squeeze in!',
+    },
+    biteVolume: 0.5,
+    /** The crack in the rock that ends the chase: wide enough for a blobfish, not for a kraken. */
+    refuge: {
+      wallX: 11250,
+      width: 760,
+      height: 720,
+      halfGap: 76,
+      funnel: 190,
+      pad: 48,
+      seed: 2203,
+      /** The roof of the crack, its mouth as [share of the funnel, rise], and the face above it. */
+      roof: { step: 110, wave: 6 },
+      mouth: [[0.55, 28], [0.2, 82], [0, 165]] as [number, number][],
+      mouthJitter: 12,
+      face: { from: 260, step: { min: 90, max: 140 }, jag: 24 },
+      krakenMargin: 20,
+      hintFromX: 10300,
+      backdrop: '#0e110c',
+      glow: { inset: 560, color: 0x7fd4ff, alpha: 0.4, scale: 2.4, lightRadius: 260, lightIntensity: 1.2 },
+      ramShakeMs: 700,
+      ramShakeIntensity: 0.02,
+      ramVolume: 0.5,
+      /** The fish drifts on into the crack at this share of its speed once it is safe. */
+      coastSpeedFactor: 0.5,
+      exitDelayMs: 3000,
+    },
   },
   kraken: {
     mouthOffsetX: 200,
     mouthOffsetY: 150,
     mouthSize: { width: 300, height: 200 },
-    followFactorX: 0.017,
+    /** From the mouth point to the fish at the moment the jaws touch it. */
+    biteReach: 200,
     followFactorY: 0.34,
     wobbleSpeed: 0.005,
     wobbleAmount: 5,
@@ -402,14 +483,8 @@ export const config = {
     eye: { offsetX: 18, offsetY: 6, color: 0xffd98a, scale: 0.85, alpha: 0.55, pulse: 0.2, pulseMs: 900 },
     /** The artwork has a see-through mouth; a dark throat behind it keeps the water out. */
     maw: { offsetX: 250, offsetY: 172, width: 380, height: 200, angle: 8, inner: '#0d0504', outer: '#2a0d0a' },
-    /** The lashing arm leaves the body above the head or below the jaw, never through the mouth. */
-    strikeAnchor: {
-      top: { offsetX: 150, offsetY: -40 },
-      bottom: { offsetX: 40, offsetY: 300 },
-    },
   },
   tentacle: {
-    texture: 'krakenArm',
     paint: {
       length: 512,
       thickness: 96,
@@ -431,109 +506,111 @@ export const config = {
       { offsetX: -150, offsetY: 120, angle: 172, length: 390, width: 90, sway: 46, bend: -70, swayMs: 2500, phase: 5.1 },
     ],
     idleCurl: 0.9,
+    /**
+     * The lashing arm leaves the body where one of the idle arms is rooted: above the head or
+     * below the jaw, never through the mouth. Values are indexes into `idle`.
+     */
+    strikeRoot: { top: 0, bottom: 1 } as Record<TunnelSide, number>,
+    /** One lash: how it is telegraphed, how it moves and what a hit costs. */
     strike: {
-      initialDelayMs: 2800,
-      intervalMs: { min: 2600, max: 4000 },
-      startWorldX: 1500,
-      endWorldX: 11200,
       warningMs: 560,
       strikeMs: 190,
-      holdMs: 220,
+      holdMs: 320,
       retractMs: 280,
-      /** The aim leads the fish by this much of its current velocity. */
-      leadMs: 300,
       overshootX: 170,
       wallMargin: 20,
       /** Where along the arm the aimed spot sits, 0 at the body and 1 at the tip. */
       passAt: 0.6,
       width: 118,
       hitRadius: 44,
+      hitSamples: 10,
+      stunMs: 320,
       wobble: 14,
       wobbleMs: 240,
-      warningColor: 0xd9604a,
-      warningWidth: 26,
-      warningAlpha: 0.3,
-      markerRadius: 46,
-      hintCount: 2,
+      warning: {
+        color: 0xd9604a,
+        width: 26,
+        alpha: 0.3,
+        samples: 14,
+        pulseMs: 130,
+        pulseFrom: 0.45,
+        markerRadius: 46,
+        ringWidth: 4,
+        ringAlpha: 0.9,
+        fillAlpha: 0.25,
+      },
+      hint: { up: '↑ Swim up', down: '↓ Swim down', gap: 16 },
+      hitVolume: 0.35,
       shakeMs: 220,
       shakeIntensity: 0.014,
     },
   },
+  /** Rendering and collision of the walls of a vertical level, for any level with a `shaft`. */
+  shaft: {
+    seed: 9173,
+    sampleStep: 8,
+    collisionStride: 2,
+    overscan: 96,
+    /** Deliberately not a power of two: those textures wrap, and the seams would bleed. */
+    chunkHeight: 480,
+    chunkPad: 200,
+    /**
+     * Wall artwork exists only around the camera: a chunk is painted once it comes within
+     * `create` px of the view and dropped again beyond `drop`, which keeps a tall shaft from
+     * holding tens of megabytes of texture it is not showing.
+     */
+    chunkWindow: { create: 600, drop: 1500 },
+    outerPad: 40,
+    edgeMargin: 12,
+    fillerWidth: 3000,
+    rightPhase: 2.4,
+    /** Layered sine wobble as [period px, amplitude px]. */
+    roughness: [[37, 8], [91, 7], [13.7, 3]] as [number, number][],
+    ledgeShelf: 0.2,
+    ledgeTip: 0.46,
+    alcoveLip: 0.28,
+    strata: { spacing: { min: 110, max: 230 }, steps: 12, reach: 1100, tilt: 0.08, wave: { min: 6, max: 16 }, waveLength: 70 },
+    floorHeight: 76,
+    floorStep: 24,
+    /** Floor wobble as [period px, amplitude px, phase]. */
+    floorWaves: [[83, 12, 0], [31, 4.8, 1.7]] as [number, number, number][],
+    floorSeed: 977,
+  },
   trench: {
-    walls: {
-      seed: 9173,
-      sampleStep: 8,
-      collisionStride: 2,
-      overscan: 96,
-      /** Deliberately not a power of two: those textures wrap, and the seams would bleed. */
-      chunkHeight: 480,
-      chunkPad: 200,
-      outerPad: 40,
-      edgeMargin: 12,
-      fillerWidth: 3000,
-      rightPhase: 2.4,
-      /** Layered sine wobble as [period px, amplitude px]. */
-      roughness: [[37, 8], [91, 7], [13.7, 3]] as [number, number][],
-      ledgeShelf: 0.2,
-      ledgeTip: 0.46,
-      alcoveLip: 0.28,
-      strataSpacing: { min: 110, max: 230 },
-      strataSteps: 12,
-      strataReach: 1100,
-      floorHeight: 76,
-      floorWave: 12,
-      floorStep: 24,
-    },
-    depthMeter: { surfaceMeters: 640, metersPerPx: 0.2 },
+    /** The readout moves in whole steps, so the label is not redrawn on every frame of a climb. */
+    depthMeter: { surfaceMeters: 640, metersPerPx: 0.2, stepMeters: 5 },
     startHintDelayMs: 2600,
+    /** Shown once each, as the fish first climbs past the depth. */
     hints: [
-      { y: 2000, text: 'The current drags you down. The only way is deeper' },
-      { y: 3900, text: 'Let go and you sink without a sound' },
-      { y: 6450, text: 'They hunt by sound: stop swimming and sink past them' },
-      { y: 7850, text: 'Hold SHIFT to slip past the lures unseen' },
-      { y: 9400, text: 'Something warm glows at the very bottom' },
+      { y: 10700, text: 'The only way is up: follow the glow' },
+      { y: 9250, text: 'Anglers hunt by sight: hold SHIFT to sneak past their lures' },
+      { y: 7760, text: 'These are blind but hear everything: sneak with SHIFT' },
+      { y: 6460, text: 'The currents drag sideways: swim across them' },
+      { y: 2480, text: 'Warm water rises here: let it lift you' },
     ] as DepthHint[],
+    /** The warm vent on the trench floor: the only light the abyss has of its own. */
     vent: {
       x: 800,
       chimneyWidth: 190,
       chimneyHeight: 200,
       chimneyVariant: 2,
-      triggerRadius: 170,
-      triggerDepth: 150,
+      /** Share of the chimney height at which the mouth sits, and how deep its base is sunk. */
+      mouthAt: 0.86,
+      sunk: 0.1,
+      coreScale: 0.7,
       color: 0xff9a4a,
       coreColor: 0xffe2a8,
       glowScale: 2.6,
       glowPulse: 0.25,
       pulseMs: 1600,
       light: { radius: 380, intensity: 1.7, pulse: 0.5 },
-      embers: { everyMs: 90, speed: { min: 60, max: 170 }, drift: 26, lifespanMs: 2300, scale: 0.32 },
-      eruption: { everyMs: 10, speedScale: 5, lifespanMs: 2600, lightRadius: 900, lightIntensity: 4, glowScale: 6 },
+      embers: { everyMs: 90, speed: { min: 60, max: 170 }, drift: 26, lifespanMs: 2300, scale: 0.32, alpha: 0.9 },
     },
-    finale: {
-      rumbleMs: 1500,
-      rumbleIntensity: 0.012,
-      gatherMs: 800,
-      liftDelayMs: 1200,
+    /** Leaving the neck is the end of the climb: the level is decided and the garden takes over. */
+    arrival: {
       musicFadeMs: 1200,
       resultHoldMs: 2600,
       victoryVolume: 0.4,
-    },
-    ride: {
-      step: 20,
-      smoothRows: 6,
-      wallMargin: 140,
-      startSpeed: 160,
-      maxSpeed: 980,
-      acceleration: 620,
-      /** Speed shed per px left to the arrival point, which eases the fish out of the neck. */
-      brake: 1.5,
-      endSpeed: 170,
-      arriveY: 1230,
-      exitSpeed: 150,
-      cameraOffsetY: 150,
-      cameraOffsetMs: 900,
-      turnRate: 0.2,
-      trail: { everyMs: 24, speed: { min: 90, max: 280 }, drift: 40, lifespanMs: 900, scale: 0.45, tint: 0xbfe9ff },
     },
     garden: {
       plugY: 1565,
@@ -542,16 +619,25 @@ export const config = {
       ceilingPush: 0.12,
       ceilingHint: 'No higher. Up there a blobfish comes apart',
       hint: 'Swim to the great coral',
-      hintDelayMs: 1500,
+      hintDelayMs: 2200,
       reachRadius: 300,
       timeoutMs: 26000,
       restOffset: { x: -340, y: 20 },
       settleMs: 2200,
       bobPx: 6,
       bobMs: 2400,
-      updraft: { everyMs: 70, speed: { min: 70, max: 190 }, lifespanMs: 2200, scale: 0.28 },
-      skylight: { height: 1150, alpha: 0.5, color: '96, 168, 235', strength: 0.6, beams: 4 },
-      motes: { everyMs: 130, lifespanMs: 6500, rise: { min: 6, max: 22 }, scale: { min: 0.03, max: 0.09 }, top: 180, bottom: 1500 },
+      updraft: { everyMs: 70, speed: { min: 70, max: 190 }, drift: 14, lifespanMs: 2200, scale: 0.28, alpha: 0.5, depth: 60 },
+      skylight: {
+        height: 1150,
+        alpha: 0.5,
+        color: '96, 168, 235',
+        strength: 0.6,
+        /** Not a power of two: such textures repeat, and the bright top would bleed into the bottom edge. */
+        texture: { width: 480, height: 500 },
+        fadeAt: 0.9,
+        beams: { count: 4, color: '190, 225, 255', strength: 0.22, top: 18, bottom: 50, slant: 20, spread: 9, length: 0.8 },
+      },
+      motes: { everyMs: 130, speed: { min: 6, max: 22 }, drift: 8, lifespanMs: 6500, scale: { min: 0.03, max: 0.09 }, alpha: 0.85, top: 180, bottom: 1500 },
       glowAlpha: 0.32,
       glowScale: 1.5,
       sway: { degrees: { min: 1.2, max: 3.2 }, ms: { min: 2600, max: 4400 } },
@@ -599,12 +685,15 @@ export const config = {
       panOffset: { x: 120, y: 110 },
     },
     backdrop: {
-      size: 1024,
+      /** Painted at half size and shown at `tileScale`, which is what blurs it. */
+      size: 512,
+      tileScale: 2,
+      waveAmplitude: { min: 4, max: 17 },
       seed: 311,
       base: '#1a222b',
       tones: ['#232d37', '#141a21', '#2a3540'],
       columns: 7,
-      specks: 900,
+      specks: 450,
     },
   },
   current: {
@@ -639,9 +728,11 @@ export const config = {
   },
   hud: {
     title: { fadeMs: 700, holdMs: 1500 },
+    /** Fade of every HUD text, and how long a timed hint stays up. */
+    fadeMs: 400,
+    hintHoldMs: 5500,
   },
   records: {
-    timerUpdateMs: 100,
     resultToastMs: 1600,
     storageKey: 'ad-light:progress:v1',
   },
@@ -649,6 +740,7 @@ export const config = {
     1: {
       width: 5000,
       title: 'Dim Waters',
+      goal: { type: 'collect' },
       tutorial: true,
       music: ['gameMusic1'],
       textures: {
@@ -667,6 +759,7 @@ export const config = {
     2: {
       width: 8000,
       title: 'The Dark',
+      goal: { type: 'collect' },
       music: ['gameMusic2'],
       textures: {
         backgroundFar: 'level2BgFar',
@@ -686,10 +779,8 @@ export const config = {
       width: 12000,
       title: 'The Kraken',
       music: ['gameMusic3'],
-      goal: 'escape',
-      escape: { finishX: 11500 },
-      plankton: true,
-      tentacleAttacks: true,
+      // Well inside the crack of the refuge, past the rock face at chase.refuge.wallX.
+      goal: { type: 'reach', x: 11600 },
       lighting: {
         ambientColor: 0x3a4a8a,
         fuelStart: 100,
@@ -699,7 +790,6 @@ export const config = {
       textures: {
         backgroundFar: 'level3BgFar',
         background: 'level3Bg',
-        foreground: 'emptyTexture',
       },
       enemies: [],
       mollusks: {
@@ -724,27 +814,27 @@ export const config = {
       orientation: 'vertical',
       title: 'The Trench',
       music: ['gameMusic2'],
-      goal: 'descend',
-      plankton: true,
-      spawn: { x: 800, y: 2040 },
+      // The top of the neck, where the shaft opens into the coral garden.
+      goal: { type: 'reach', y: 1500 },
+      // On the trench floor, beside the vent.
+      spawn: { x: 620, y: 10600 },
+      lighting: { fuelStart: 100 },
       depthProfile: [
         { y: 0, ambient: 0x3f6f9c, drain: 0 },
         { y: 1500, ambient: 0x2c5682, drain: 0 },
         { y: 1950, ambient: 0x14265a, drain: 1 },
         { y: 2500, ambient: 0x1a2a6c, drain: 1 },
-        { y: 9300, ambient: 0x05070d, drain: 1.8 },
-        { y: 11000, ambient: 0x020305, drain: 2.2 },
+        { y: 9300, ambient: 0x05070d, drain: 1.5 },
+        { y: 11000, ambient: 0x020305, drain: 1.6 },
       ],
       currentZones: [
-        // The neck: nothing swims back up against this.
-        { y: 1560, height: 780, forceY: 430 },
+        // The neck: warm water rising into the garden.
+        { y: 1560, height: 780, forceY: -150 },
         { y: 5300, height: 500, forceX: 110 },
         { y: 5950, height: 500, forceX: -120 },
       ],
       textures: {
         backgroundFar: 'trenchBackdrop',
-        background: 'emptyTexture',
-        foreground: 'emptyTexture',
       },
       shaft: {
         left: [
@@ -774,7 +864,7 @@ export const config = {
           { side: 'left', y: 640, height: 170, reach: 400 },
           { side: 'right', y: 400, height: 170, reach: 420 },
 
-          // Long shelves turn the fall into a serpentine: every gap is on the far side.
+          // Long shelves turn the climb into a serpentine: every gap is on the far side.
           { side: 'left', y: 3020, height: 240, reach: 1120 },
           { side: 'right', y: 3500, height: 240, reach: 1150 },
 
@@ -810,7 +900,6 @@ export const config = {
         },
       ],
       mollusks: {
-        count: 24,
         nests: [
           { x: 1010, y: 2900, count: 3 },
           { x: 620, y: 3390, count: 2 },
@@ -824,7 +913,7 @@ export const config = {
           { x: 660, y: 8655, count: 1 },
           { x: 800, y: 9460, count: 2 },
           { x: 520, y: 9960, count: 2 },
-          { x: 1080, y: 10360, count: 1 },
+          { x: 1080, y: 10360, count: 2 },
         ],
       },
     }

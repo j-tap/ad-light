@@ -5,13 +5,14 @@ import { LightFuel } from './systems/LightFuel';
 import { NoiseField } from './systems/NoiseField';
 import { Terrain } from './systems/Terrain';
 import { ensureTexture } from './textures';
-import { config } from '../config';
+import { config, REFERENCE_FRAME_MS, LevelLighting, Point } from '../config';
 
 const WAVE_TEXTURE = 'waveTexture';
 const BONE_TEXTURE = 'bones';
-const REFERENCE_FRAME_MS = 1000 / 30;
 
 const lightSettings = config.player.light;
+/** The fish is kept out of rock as two circles, one towards each end of its body. */
+const TERRAIN_OFFSETS = [-config.terrain.playerSpread, config.terrain.playerSpread];
 
 export class Player {
   private readonly healthMax: number = config.player.maxHealth;
@@ -26,10 +27,10 @@ export class Player {
   private readonly lightFuel = new LightFuel();
   private readonly movementController: MovementController;
   private readonly bubbleEmitter: BubbleEmitter;
-  private readonly dimKey?: Phaser.Input.Keyboard.Key;
+  private readonly sneakKey?: Phaser.Input.Keyboard.Key;
   private idleTween?: Phaser.Tweens.Tween;
   private wasMovingLastFrame = false;
-  private isInvulnerable = false;
+  private blinking = false;
   private shielded = false;
   private scripted = false;
   private alive = true;
@@ -40,32 +41,34 @@ export class Player {
   private stunEndTime = 0;
   private health: number;
 
-  constructor(scene: Phaser.Scene, noiseField: NoiseField, spawn?: { x: number, y: number }) {
+  constructor(scene: Phaser.Scene, noiseField: NoiseField, spawn: Point) {
     this.scene = scene;
     this.noiseField = noiseField;
     this.health = this.healthMax;
-    this.sprite = this.createSprite(spawn?.x ?? scene.scale.width / 2, spawn?.y ?? scene.scale.height / 2);
+    this.sprite = this.createSprite(spawn.x, spawn.y);
     this.light = this.createLight();
     this.bubbleEmitter = new BubbleEmitter(this.scene, this.sprite);
     this.movementController = new MovementController(this.sprite);
-    this.dimKey = scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
+    this.sneakKey = scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
 
     this.createTextures();
   }
 
-  update(time: number, delta: number) {
+  update(delta: number) {
     if (!this.alive) return;
 
     this.moveWaveTimer += delta;
 
     const isInputActive = this.movementController.isInputActive();
     const isMoving = this.isMoving(config.player.movingThreshold);
+    const sneaking = this.isSneaking();
 
     if (isInputActive && !this.wasMovingLastFrame) {
       this.bubbleEmitter.emitBurst();
     }
 
-    if (isMoving && this.moveWaveTimer >= this.waveInterval) {
+    // A sneaking fish leaves no ripples, and the ripples are the noise hunters hear.
+    if (isMoving && !sneaking && this.moveWaveTimer >= this.waveInterval) {
       this.moveWaveTimer = 0;
       this.createMoveWave();
     }
@@ -74,42 +77,31 @@ export class Player {
       this.sprite.setVelocity(0, 0);
       this.handleAnimations(false);
     } else {
-      this.movementController.update(this.speed);
+      this.movementController.update(sneaking ? this.speed * config.player.sneakSpeedFactor : this.speed);
       this.handleAnimations(isMoving);
     }
 
     this.wasMovingLastFrame = isInputActive;
 
-    this.lightFuel.update(delta, this.isDimming(), this.lightDrainMultiplier);
+    this.lightFuel.update(delta, sneaking, this.lightDrainMultiplier);
     this.updateLight(delta);
     this.updateDarknessPressure(delta);
   }
 
   /**
-   * Cutscenes move the fish themselves: input, physics and damage are switched off, while the
-   * light and the swim cycle keep running through updateScripted.
+   * Hands the fish over to a cutscene for good: input and physics are switched off and it
+   * passes through rock, while the light keeps running through updateScripted.
    */
-  setScripted(scripted: boolean) {
-    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
-
-    this.scripted = scripted;
-    body.enable = !scripted;
-
-    if (scripted) {
-      this.movementController.disable();
-      this.sprite.setVelocity(0, 0);
-      this.stopIdleTween();
-    } else {
-      this.movementController.enable();
-      body.reset(this.sprite.x, this.sprite.y);
-      this.sprite.setRotation(0);
-    }
+  beginScripted() {
+    this.scripted = true;
+    this.movementController.disable();
+    this.sprite.setVelocity(0, 0);
+    (this.sprite.body as Phaser.Physics.Arcade.Body).enable = false;
+    this.stopIdleTween();
   }
 
-  updateScripted(delta: number, swimming: boolean) {
-    if (swimming) {
-      this.sprite.play('swim', true);
-    } else if (this.sprite.anims.isPlaying) {
+  updateScripted(delta: number) {
+    if (this.sprite.anims.isPlaying) {
       this.sprite.stop();
       this.sprite.setFrame(1);
     }
@@ -118,18 +110,17 @@ export class Player {
     this.updateLight(delta);
   }
 
-  /** False while the fish is being moved by a script and must pass through rock. */
-  isSolid() {
-    return !this.scripted;
+  isScripted() {
+    return this.scripted;
   }
 
   /** Pushes the fish out of solid rock and returns how hard it ran into it, in px/s. */
   resolveTerrain(terrain: Terrain) {
-    const { playerRadius, playerSpread } = config.terrain;
+    const { playerRadius } = config.terrain;
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
     let impact = 0;
 
-    for (const offset of [-playerSpread, playerSpread]) {
+    for (const offset of TERRAIN_OFFSETS) {
       const contact = terrain.resolveCircle(this.sprite.x + offset, this.sprite.y, playerRadius);
 
       if (!contact.hit) continue;
@@ -164,8 +155,9 @@ export class Player {
     return this.movementController.isInputActive();
   }
 
-  isDimming() {
-    return this.dimKey?.isDown === true;
+  /** Holding the sneak key trades speed and sight for stealth: dim light, slow and silent swimming. */
+  isSneaking() {
+    return this.sneakKey?.isDown === true;
   }
 
   refillLight(amount: number) {
@@ -177,7 +169,7 @@ export class Player {
     this.lightDrainMultiplier = multiplier;
   }
 
-  applyLightProfile(profile: { fuelStart?: number, drainMultiplier?: number, radiusMultiplier?: number }) {
+  applyLightProfile(profile: LevelLighting) {
     if (profile.fuelStart !== undefined) {
       this.lightFuel.setFuel(profile.fuelStart);
     }
@@ -199,7 +191,7 @@ export class Player {
     this.health = Phaser.Math.Clamp(health, 0, this.healthMax);
   }
 
-  /** A lasting shield for scripted moments; the blink after a hit runs on its own flag. */
+  /** A lasting shield for scripted moments; the blink after a hit runs on its own flag, `blinking`. */
   setInvulnerable(value: boolean = true) {
     this.shielded = value;
   }
@@ -221,12 +213,12 @@ export class Player {
     return this.movementController.isMoving(threshold);
   }
 
-  canInvulnerable() {
-    return this.isInvulnerable || this.shielded;
+  isImmune() {
+    return this.blinking || this.shielded;
   }
 
   takeDamage(amount: number = 1) {
-    if (!this.alive || this.canInvulnerable()) return;
+    if (!this.alive || this.isImmune()) return;
 
     this.setHealth(this.health - amount);
     this.noiseField.emit(this.sprite.x, this.sprite.y, 1);
@@ -363,7 +355,7 @@ export class Player {
   }
 
   private becomeInvulnerable() {
-    this.isInvulnerable = true;
+    this.blinking = true;
 
     this.scene.tweens.add({
       targets: this.sprite,
@@ -373,7 +365,7 @@ export class Player {
       repeat: 5,
       ease: 'Sine.easeInOut',
       onComplete: () => {
-        this.isInvulnerable = false;
+        this.blinking = false;
         this.sprite.setAlpha(1);
       }
     });

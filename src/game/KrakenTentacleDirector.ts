@@ -1,34 +1,49 @@
 import Phaser from 'phaser';
-import { config } from '../config';
+import { config, RockObstacleDef } from '../config';
 import { EnemyKraken } from './enemies/Kraken';
 import { Player } from './Player';
-import { KrakenTentacleStrike, TentacleSide } from './KrakenTentacleStrike';
+import { KrakenTentacleStrike, StrikeOutcome } from './KrakenTentacleStrike';
 
-const settings = config.tentacle.strike;
-const RETRY_MS = 500;
+const settings = config.chase.strikes;
 
-/** Paces the arm strikes during the chase: one at a time, alternating floor and ceiling. */
+/**
+ * Paces the arm strikes during the chase and decides where each one goes. The aim is where the
+ * fish ends up if it keeps its lane; the arm comes from the side of the tunnel the fish is
+ * nearer to, so the way out is always towards the middle; and no strike is aimed at a rock
+ * spike, where there would be no room left to dodge. Strikes come faster the closer the
+ * kraken is and deeper into the tunnel arrive in pairs.
+ */
 export class KrakenTentacleDirector {
   private readonly scene: Phaser.Scene;
   private readonly player: Player;
   private readonly kraken: EnemyKraken;
   private readonly worldHeight: () => number;
-  private activeStrike?: KrakenTentacleStrike;
+  private readonly blocked: Array<{ from: number, to: number }>;
+  private readonly onHit: () => void;
+  private readonly onDodge: () => void;
+  private readonly active = new Set<KrakenTentacleStrike>();
   private timer?: Phaser.Time.TimerEvent;
   private running = false;
-  private lastSide: TentacleSide = 'bottom';
-  private strikes = 0;
+  private launched = 0;
 
   constructor(
     scene: Phaser.Scene,
     player: Player,
     kraken: EnemyKraken,
     worldHeight: () => number,
+    rocks: RockObstacleDef[],
+    onHit: () => void,
+    onDodge: () => void,
   ) {
+    const { before, after } = settings.rockClearance;
+
     this.scene = scene;
     this.player = player;
     this.kraken = kraken;
     this.worldHeight = worldHeight;
+    this.blocked = rocks.map(rock => ({ from: rock.x - before, to: rock.x + rock.width + after }));
+    this.onHit = onHit;
+    this.onDodge = onDodge;
   }
 
   start() {
@@ -41,12 +56,12 @@ export class KrakenTentacleDirector {
   stop() {
     this.running = false;
     this.timer?.remove();
-    this.activeStrike?.destroy();
-    this.activeStrike = undefined;
+    this.active.forEach(strike => strike.destroy());
+    this.active.clear();
   }
 
   update(delta: number) {
-    this.activeStrike?.update(delta);
+    this.active.forEach(strike => strike.update(delta));
   }
 
   private scheduleNext(delayMs: number) {
@@ -64,30 +79,65 @@ export class KrakenTentacleDirector {
       return;
     }
 
-    if (this.activeStrike || playerX < settings.startWorldX || !this.player.isAlive()) {
-      this.scheduleNext(RETRY_MS);
+    if (playerX < settings.startWorldX || !this.launch()) {
+      this.scheduleNext(settings.retryMs);
       return;
     }
 
-    const side: TentacleSide = this.lastSide === 'bottom' ? 'top' : 'bottom';
+    if (playerX >= settings.pair.fromWorldX && Math.random() < settings.pair.chance) {
+      this.scene.time.delayedCall(settings.pair.delayMs, () => {
+        if (this.running) this.launch();
+      });
+    }
 
-    this.lastSide = side;
-    this.strikes++;
+    this.scheduleNext(this.nextInterval(playerX));
+  }
 
-    this.activeStrike = new KrakenTentacleStrike(
+  /** Returns false when there is no fair strike to make right now. */
+  private launch() {
+    if (this.active.size >= settings.maxActive || !this.player.isAlive()) return false;
+
+    const sprite = this.player.getSprite();
+    const velocityX = (sprite.body as Phaser.Physics.Arcade.Body).velocity.x;
+    const worldHeight = this.worldHeight();
+    const aim = { x: sprite.x + Math.max(velocityX, 0) * (settings.leadMs / 1000), y: sprite.y };
+
+    if (this.blocked.some(zone => aim.x >= zone.from && aim.x <= zone.to)) return false;
+
+    const outcome: StrikeOutcome = {
+      onHit: this.onHit,
+      onDone: hit => {
+        this.active.delete(strike);
+
+        if (!hit) this.onDodge();
+      },
+    };
+    const strike = new KrakenTentacleStrike(
       this.scene,
-      side,
-      this.worldHeight(),
+      {
+        side: sprite.y < worldHeight / 2 ? 'top' : 'bottom',
+        aim,
+        worldHeight,
+        showHint: this.launched < settings.hintCount,
+      },
       this.player,
       this.kraken,
-      this.strikes <= settings.hintCount,
-      () => {
-        this.activeStrike = undefined;
+      outcome
+    );
 
-        if (this.running) {
-          this.scheduleNext(Phaser.Math.Between(settings.intervalMs.min, settings.intervalMs.max));
-        }
-      },
+    this.launched++;
+    this.active.add(strike);
+
+    return true;
+  }
+
+  private nextInterval(playerX: number) {
+    const { near, far } = settings.intervalMs;
+    const distance = 1 - this.kraken.getCloseness(playerX);
+
+    return Phaser.Math.Between(
+      Phaser.Math.Linear(near.min, far.min, distance),
+      Phaser.Math.Linear(near.max, far.max, distance)
     );
   }
 }

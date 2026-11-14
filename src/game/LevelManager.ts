@@ -1,12 +1,10 @@
 import Phaser from 'phaser';
 import type { CurrentZone, LevelTextures } from '../config';
 import { config } from '../config';
-import { EMPTY_TEXTURE, ensureEmptyTexture } from './textures';
 import { ensureTrenchBackdrop, TRENCH_BACKDROP } from './art/backdrop';
 
 interface LevelCreateConfig {
   textures: LevelTextures,
-  plankton: boolean,
   vertical?: boolean,
   currentZones?: CurrentZone[],
 }
@@ -22,6 +20,7 @@ interface LevelLayer {
 
 const FOREGROUND_DEPTH = config.render.foreground;
 const FOREGROUND_PARALLAX = 3;
+const FAR_PARALLAX = 0.2;
 
 export class LevelManager {
   private readonly scene: Phaser.Scene;
@@ -35,22 +34,20 @@ export class LevelManager {
     this.scene = scene;
   }
 
-  createLevel({ textures, plankton, vertical = false, currentZones = [] }: LevelCreateConfig) {
+  createLevel({ textures, vertical = false, currentZones = [] }: LevelCreateConfig) {
     this.vertical = vertical;
 
-    [textures.foreground, textures.background, textures.backgroundFar].forEach(key => {
-      if (key === EMPTY_TEXTURE) ensureEmptyTexture(this.scene);
-      if (key === TRENCH_BACKDROP) ensureTrenchBackdrop(this.scene);
-    });
+    this.createFarLayer(textures.backgroundFar);
 
-    this.createLayer(textures.backgroundFar, 0.2, true).sprite.postFX.addBlur(1);
-    this.createLayer(textures.background, 1, false);
-    this.createLayer(textures.foreground, FOREGROUND_PARALLAX, true).sprite.setDepth(FOREGROUND_DEPTH);
-
-    if (plankton) {
-      this.createPlanktonEmitter();
+    if (textures.background) {
+      this.createLayer(textures.background, 1, false);
     }
 
+    if (textures.foreground) {
+      this.createLayer(textures.foreground, FOREGROUND_PARALLAX, true).sprite.setDepth(FOREGROUND_DEPTH);
+    }
+
+    this.createPlanktonEmitter();
     currentZones.forEach(zone => this.createCurrentEmitter(zone));
   }
 
@@ -58,11 +55,10 @@ export class LevelManager {
     const { scrollX, scrollY } = this.scene.cameras.main;
 
     this.layers.forEach(layer => {
+      layer.sprite.tilePositionX = scrollX * layer.parallax;
+
       if (this.vertical) {
-        layer.sprite.tilePositionX = scrollX * layer.parallax;
         layer.sprite.tilePositionY = scrollY * layer.parallax;
-      } else {
-        layer.sprite.tilePositionX = scrollX * layer.parallax;
       }
     });
 
@@ -80,6 +76,20 @@ export class LevelManager {
   resize() {
     this.layers.forEach(layer => this.layoutLayer(layer));
     this.planktonZone?.setSize(this.scene.scale.width, this.scene.scale.height);
+  }
+
+  /**
+   * Painted backdrops are softened with a blur pass. The generated trench backdrop is drawn
+   * small and stretched instead, which gives the same softness without a per-frame filter.
+   */
+  private createFarLayer(texture: string) {
+    if (texture !== TRENCH_BACKDROP) {
+      this.createLayer(texture, FAR_PARALLAX, true).sprite.postFX.addBlur(1);
+      return;
+    }
+
+    this.createLayer(ensureTrenchBackdrop(this.scene), FAR_PARALLAX, true).sprite
+      .setTileScale(config.trench.backdrop.tileScale);
   }
 
   /**
@@ -157,7 +167,7 @@ export class LevelManager {
     }).setDepth(config.render.player + 1);
   }
 
-  /** Currents live in world space so they stay put as the camera dives. */
+  /** Currents live in world space so they stay put as the camera moves through them. */
   private createCurrentEmitter(zone: CurrentZone) {
     const { particleSpeed, particleSpread, particleLifeMs, particleEveryMs } = config.current;
     const width = this.scene.physics.world.bounds.width;

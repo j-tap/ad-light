@@ -54,10 +54,6 @@ export class MovementController {
     this.touchVector.set(0, 0);
   }
 
-  enable() {
-    this.enabled = true;
-  }
-
   /** Normalized so diagonal input does not move faster than a single axis. */
   private getInputDirection(): Phaser.Math.Vector2 {
     const [left, right, up, down] = this.keys;

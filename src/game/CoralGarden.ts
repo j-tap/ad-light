@@ -2,13 +2,12 @@ import Phaser from 'phaser';
 import { config, CoralPlacement } from '../config';
 import { ensureCoralTexture } from './art/coral';
 import { TrenchWalls } from './TrenchWalls';
-import { ensureCanvasTexture, ensureSoftGlow } from './textures';
+import { addRisingParticles } from './art/particles';
+import { addSoftGlow, ensureCanvasTexture, ensureSoftGlow } from './textures';
 
 const settings = config.trench.garden;
 const palettes = config.coral.palettes;
 const SKYLIGHT_TEXTURE = 'gardenSkylight';
-// Not a power of two on purpose: such textures repeat, and the bright top would bleed into the bottom edge.
-const SKYLIGHT_SIZE = { width: 480, height: 500 };
 
 /**
  * The end of the journey: a shelf of glowing corals under the last trace of daylight.
@@ -53,9 +52,7 @@ export class CoralGarden {
 
     const middleY = baseY - coral.displayHeight * 0.55;
 
-    this.scene.add.image(placement.x, middleY, ensureSoftGlow(this.scene))
-      .setTint(palette.glow)
-      .setBlendMode(Phaser.BlendModes.ADD)
+    addSoftGlow(this.scene, placement.x, middleY, palette.glow)
       .setAlpha(settings.glowAlpha)
       .setDisplaySize(coral.displayWidth * settings.glowScale, coral.displayHeight * settings.glowScale)
       .setDepth(depth - 0.5);
@@ -88,30 +85,34 @@ export class CoralGarden {
   /** A soft blue wash from above: as close to daylight as a blobfish should ever get. */
   private createSkylight(worldWidth: number) {
     const { skylight } = settings;
-    const { width, height } = SKYLIGHT_SIZE;
+    const { width, height } = skylight.texture;
+    const { beams } = skylight;
 
     ensureCanvasTexture(this.scene, SKYLIGHT_TEXTURE, width, height, context => {
       const wash = context.createLinearGradient(0, 0, 0, height);
 
       // Fully clear well before the last row, or filtering turns the bottom edge into a line.
       wash.addColorStop(0, `rgba(${skylight.color}, ${skylight.strength})`);
-      wash.addColorStop(0.9, `rgba(${skylight.color}, 0)`);
+      wash.addColorStop(skylight.fadeAt, `rgba(${skylight.color}, 0)`);
       context.fillStyle = wash;
       context.fillRect(0, 0, width, height);
 
-      for (let beam = 0; beam < skylight.beams; beam++) {
-        const centre = ((beam + 0.5) / skylight.beams) * width;
-        const shaft = context.createLinearGradient(0, 0, 0, height * 0.8);
+      const reach = height * beams.length;
 
-        shaft.addColorStop(0, 'rgba(190, 225, 255, 0.22)');
-        shaft.addColorStop(1, 'rgba(190, 225, 255, 0)');
+      for (let beam = 0; beam < beams.count; beam++) {
+        const top = ((beam + 0.5) / beams.count) * width;
+        const bottom = top + beams.slant + beam * beams.spread;
+        const shaft = context.createLinearGradient(0, 0, 0, reach);
+
+        shaft.addColorStop(0, `rgba(${beams.color}, ${beams.strength})`);
+        shaft.addColorStop(1, `rgba(${beams.color}, 0)`);
 
         context.fillStyle = shaft;
         context.beginPath();
-        context.moveTo(centre - 18, 0);
-        context.lineTo(centre + 18, 0);
-        context.lineTo(centre + 70 + beam * 9, height * 0.85);
-        context.lineTo(centre - 30 + beam * 9, height * 0.85);
+        context.moveTo(top - beams.top, 0);
+        context.lineTo(top + beams.top, 0);
+        context.lineTo(bottom + beams.bottom, reach);
+        context.lineTo(bottom - beams.bottom, reach);
         context.closePath();
         context.fill();
       }
@@ -128,18 +129,12 @@ export class CoralGarden {
   private createMotes(worldWidth: number) {
     const { motes } = settings;
 
-    this.scene.add.particles(0, 0, ensureSoftGlow(this.scene), {
+    addRisingParticles(this.scene, 0, 0, ensureSoftGlow(this.scene), motes, {
       emitZone: {
         type: 'random',
         source: new Phaser.Geom.Rectangle(0, motes.top, worldWidth, motes.bottom - motes.top),
       },
-      lifespan: motes.lifespanMs,
-      speedY: { min: -motes.rise.max, max: -motes.rise.min },
-      speedX: { min: -8, max: 8 },
-      scale: { min: motes.scale.min, max: motes.scale.max },
-      alpha: { start: 0.85, end: 0 },
       tint: palettes.map(palette => palette.glow),
-      frequency: motes.everyMs,
       blendMode: Phaser.BlendModes.ADD,
     }).setDepth(config.render.scenery + 1);
   }

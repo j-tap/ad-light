@@ -124,7 +124,7 @@ export abstract class BaseEnemy {
     if (!contact.hit) return;
 
     this.sprite.setPosition(contact.x, contact.y);
-    this.onTerrainContact(contact.normalX, contact.normalY);
+    this.onTerrainContact(contact.normalX);
     this.updateAttachments();
   }
 
@@ -155,8 +155,8 @@ export abstract class BaseEnemy {
 
   protected abstract think(delta: number, context: EnemyContext): void;
 
-  /** The normal points away from the rock that was touched. */
-  protected onTerrainContact(_normalX: number, _normalY: number) {}
+  /** `normalX` is the horizontal part of the direction away from the rock that was touched. */
+  protected onTerrainContact(_normalX: number) {}
 
   protected get body() {
     return this.sprite.body as Phaser.Physics.Arcade.Body;

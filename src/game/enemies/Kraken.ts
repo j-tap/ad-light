@@ -1,13 +1,11 @@
 import Phaser from 'phaser';
-import { config } from '../../config';
+import { config, TAU, REFERENCE_FRAME_MS, TunnelSide } from '../../config';
 import { KrakenArm } from '../KrakenArm';
-import { ensureCanvasTexture, ensureSoftGlow } from '../textures';
-import type { TentacleSide } from '../KrakenTentacleStrike';
+import { addSoftGlow, ensureCanvasTexture } from '../textures';
 
-const REFERENCE_FRAME_MS = 1000 / 30;
-const TAU = Math.PI * 2;
 
 const settings = config.kraken;
+const gapSettings = config.chase.gap;
 const MAW_TEXTURE = 'krakenMaw';
 const armSettings = config.tentacle.idle;
 
@@ -21,8 +19,10 @@ export class EnemyKraken {
   private readonly arms: KrakenArm[];
   private readonly anchor = new Phaser.Math.Vector2();
   private time = 0;
-  private isHunting = false;
-  private catchUpMultiplier = 1;
+  private hunting = false;
+  private wantedGap = gapSettings.start;
+  private barrierX?: number;
+  private onBarrier?: () => void;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
@@ -38,8 +38,8 @@ export class EnemyKraken {
     this.time += delta;
     this.facePlayer(playerX);
 
-    if (this.isHunting) {
-      this.follow(delta, playerX, playerY);
+    if (this.hunting) {
+      this.chase(delta, playerX, playerY);
     }
 
     this.animateBody();
@@ -50,36 +50,40 @@ export class EnemyKraken {
     this.glowLight.setPosition(this.sprite.x, this.sprite.y);
   }
 
-  getSprite() {
-    return this.sprite;
-  }
-
   getMouthCollider() {
     return this.mouthCollider;
   }
 
-  /** Where the striking arm leaves the body. */
-  getStrikeAnchor(side: TentacleSide, out: Phaser.Math.Vector2) {
-    const { offsetX, offsetY } = settings.strikeAnchor[side];
+  /** Where an arm striking from that side leaves the body. */
+  getStrikeRoot(side: TunnelSide, out: Phaser.Math.Vector2) {
+    const { offsetX, offsetY } = armSettings[config.tentacle.strikeRoot[side]];
 
     return this.toWorld(offsetX, offsetY, out);
   }
 
-  setIsHunting(isHunting: boolean) {
-    this.isHunting = isHunting;
+  startHunt() {
+    this.hunting = true;
   }
 
-  applyCatchUp() {
-    if (!this.isHunting) return;
+  /** A mistake by the fish: the kraken settles for a smaller gap, down to the jaws at the tail. */
+  closeIn(distance: number) {
+    this.wantedGap = Math.max(this.wantedGap - distance, gapSettings.danger);
+  }
 
-    const { krakenCatchUpMultiplier, krakenCatchUpDuration, krakenSurgeDistance } = config.rock;
+  /** A clean dodge: the kraken loses ground. */
+  fallBack(distance: number) {
+    this.wantedGap = Math.min(this.wantedGap + distance, gapSettings.max);
+  }
 
-    this.catchUpMultiplier = krakenCatchUpMultiplier;
-    this.sprite.x += krakenSurgeDistance;
+  /** 0 with the kraken as far behind as it ever gets (or not hunting yet), 1 with the jaws on the fish. */
+  getCloseness(playerX: number) {
+    return this.hunting ? 1 - Phaser.Math.Clamp(this.measureGap(playerX) / gapSettings.max, 0, 1) : 0;
+  }
 
-    this.scene.time.delayedCall(krakenCatchUpDuration, () => {
-      this.catchUpMultiplier = 1;
-    });
+  /** The jaws cannot pass this x; `onReached` fires once, when they first slam into it. */
+  setBarrier(x: number, onReached: () => void) {
+    this.barrierX = x;
+    this.onBarrier = onReached;
   }
 
   private createSprite(x: number, y: number) {
@@ -111,9 +115,7 @@ export class EnemyKraken {
 
   /** The artwork is lit like everything else, so the eye gets its own glow to stare out of the dark. */
   private createEye() {
-    return this.scene.add.image(this.sprite.x, this.sprite.y, ensureSoftGlow(this.scene))
-      .setTint(settings.eye.color)
-      .setBlendMode(Phaser.BlendModes.ADD)
+    return addSoftGlow(this.scene, this.sprite.x, this.sprite.y, settings.eye.color)
       .setDepth(config.render.kraken + 0.5);
   }
 
@@ -153,14 +155,44 @@ export class EnemyKraken {
       .add(this.sprite);
   }
 
-  /** Frame-rate independent easing towards the player. */
-  private follow(delta: number, playerX: number, playerY: number) {
-    const step = delta / REFERENCE_FRAME_MS;
-    const mouthX = this.sprite.x + this.getMouthOffsetX();
+  /** Free water between the jaws and the fish. */
+  private measureGap(playerX: number) {
+    return playerX - (this.sprite.x + this.getMouthOffsetX()) - settings.biteReach;
+  }
+
+  /**
+   * The kraken cruises at the speed of the fish and corrects towards the gap it wants, so a
+   * fish that keeps swimming holds the distance and one that stops is run down.
+   */
+  private chase(delta: number, playerX: number, playerY: number) {
+    const seconds = delta / 1000;
     const mouthY = this.sprite.y + settings.mouthOffsetY;
 
-    this.sprite.x += (playerX - mouthX) * settings.followFactorX * step * this.catchUpMultiplier;
-    this.sprite.y += (playerY - mouthY) * settings.followFactorY * step * this.catchUpMultiplier;
+    this.wantedGap = this.wantedGap > gapSettings.min
+      ? Math.max(this.wantedGap - gapSettings.creepPerSecond * seconds, gapSettings.min)
+      : Math.min(this.wantedGap + gapSettings.recoverPerSecond * seconds, gapSettings.min);
+
+    const correction = Phaser.Math.Clamp(
+      (this.measureGap(playerX) - this.wantedGap) * gapSettings.gain,
+      -gapSettings.maxFallBack,
+      gapSettings.maxClosing
+    );
+
+    this.sprite.x += (config.player.speed + correction) * seconds;
+    this.sprite.y += (playerY - mouthY) * settings.followFactorY * (delta / REFERENCE_FRAME_MS);
+    this.stopAtBarrier();
+  }
+
+  private stopAtBarrier() {
+    if (this.barrierX === undefined) return;
+
+    const limit = this.barrierX - this.getMouthOffsetX() - settings.mouthSize.width / 2;
+
+    if (this.sprite.x < limit) return;
+
+    this.sprite.x = limit;
+    this.onBarrier?.();
+    this.onBarrier = undefined;
   }
 
   private getMouthOffsetX() {

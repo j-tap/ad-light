@@ -1,15 +1,16 @@
-import { config } from '../../config';
-import { between, Rng } from './random';
+import Phaser from 'phaser';
+import { config, Point } from '../../config';
+import { ensureCanvasTexture } from '../textures';
+import { between, createRng, Rng } from './random';
 
-export interface Point {
-  x: number,
-  y: number,
-}
-
+/**
+ * Rock outlines follow one convention everywhere, in the artwork and in the collision built
+ * from it: walking along an edge, open water is on the right hand side.
+ */
 export interface RockShape {
   /** Closed outline of the solid part. */
   polygon: Point[],
-  /** The part of the outline that borders open water, open side on the right of travel. */
+  /** The part of the outline that borders open water. */
   edge: Point[],
 }
 
@@ -18,26 +19,27 @@ export interface RockFeatures {
   strata: Point[][],
 }
 
-export interface GrainArea {
-  x: number,
-  y: number,
-  width: number,
-  height: number,
+export interface StrataArea {
+  fromX: number,
+  toX: number,
+  /** Signed extent along y, measured from 0: negative grows upwards. */
+  length: number,
 }
 
 const settings = config.rock.paint;
 const { palette } = settings;
+const GRAIN_TEXTURE = 'rockGrain';
+const GRAIN_SEED = 71;
 
 /**
  * Rock in the style of the hand drawn backdrops: flat muted tones, a lighter rim along the
  * water, a heavy dark outline and a handful of cracks.
  */
 export function paintRock(
+  scene: Phaser.Scene,
   context: CanvasRenderingContext2D,
   shape: RockShape,
-  features: RockFeatures,
-  grain: GrainArea,
-  rng: Rng
+  features: RockFeatures
 ) {
   context.save();
   context.lineJoin = 'round';
@@ -48,7 +50,7 @@ export function paintRock(
   context.clip();
 
   context.fillStyle = palette.shade;
-  context.fillRect(grain.x, grain.y, grain.width, grain.height);
+  context.fill();
 
   context.strokeStyle = palette.strata;
   context.lineWidth = settings.strataWidth;
@@ -67,7 +69,13 @@ export function paintRock(
   context.lineWidth = settings.lightRimWidth * 2;
   context.stroke();
 
-  paintGrain(context, grain, rng);
+  const grain = context.createPattern(grainTile(scene), 'repeat');
+
+  if (grain) {
+    tracePath(context, shape.polygon, true);
+    context.fillStyle = grain;
+    context.fill();
+  }
 
   context.strokeStyle = palette.outline;
   features.cracks.forEach(crack => paintCrack(context, crack));
@@ -101,7 +109,7 @@ export function scatterCracks(edge: Point[], rng: Rng): Point[][] {
     travelled = 0;
     next = between(rng, crackSpacing.min, crackSpacing.max);
 
-    // Inward is the left hand side of travel, the opposite of the open water normal.
+    // Into the rock is the left hand side of travel.
     let angle = Math.atan2(-(b.x - a.x), b.y - a.y) + Math.PI + between(rng, -crackBend, crackBend);
     let x = a.x;
     let y = a.y;
@@ -122,7 +130,27 @@ export function scatterCracks(edge: Point[], rng: Rng): Point[][] {
   return cracks;
 }
 
-export function tracePath(context: CanvasRenderingContext2D, points: Point[], closed: boolean) {
+/** Gently sloped bedding lines across a free standing piece of rock. */
+export function scatterStrata(area: StrataArea, rng: Rng): Point[][] {
+  const { first, spacing, tilt, jitter } = settings.strata;
+  const lines: Point[][] = [];
+  const direction = Math.sign(area.length);
+  const width = area.toX - area.fromX;
+
+  for (let y = between(rng, first.min, first.max); y < Math.abs(area.length); y += between(rng, spacing.min, spacing.max)) {
+    const slope = between(rng, -tilt, tilt) * width;
+
+    lines.push([
+      { x: area.fromX, y: direction * y },
+      { x: area.fromX + width / 2, y: direction * y + slope / 2 + between(rng, -jitter, jitter) },
+      { x: area.toX, y: direction * y + slope },
+    ]);
+  }
+
+  return lines;
+}
+
+function tracePath(context: CanvasRenderingContext2D, points: Point[], closed: boolean) {
   context.beginPath();
   points.forEach((point, index) => {
     if (index === 0) {
@@ -147,13 +175,21 @@ function paintCrack(context: CanvasRenderingContext2D, crack: Point[]) {
   }
 }
 
-function paintGrain(context: CanvasRenderingContext2D, area: GrainArea, rng: Rng) {
-  const count = Math.round((area.width * area.height * settings.grainDensity) / 1000);
+/** Speckle painted once into a small tile and laid over the rock as a repeating fill. */
+function grainTile(scene: Phaser.Scene) {
+  const size = settings.grainTile;
 
-  for (let i = 0; i < count; i++) {
-    const size = rng() < 0.8 ? 1.5 : 2.5;
+  ensureCanvasTexture(scene, GRAIN_TEXTURE, size, size, context => {
+    const rng = createRng(GRAIN_SEED);
+    const count = Math.round((size * size * settings.grainDensity) / 1000);
 
-    context.fillStyle = rng() < 0.5 ? palette.grainDark : palette.grainLight;
-    context.fillRect(area.x + rng() * area.width, area.y + rng() * area.height, size, size);
-  }
+    for (let i = 0; i < count; i++) {
+      const dot = rng() < 0.8 ? 1.5 : 2.5;
+
+      context.fillStyle = rng() < 0.5 ? palette.grainDark : palette.grainLight;
+      context.fillRect(rng() * size, rng() * size, dot, dot);
+    }
+  });
+
+  return scene.textures.get(GRAIN_TEXTURE).getSourceImage() as HTMLCanvasElement;
 }

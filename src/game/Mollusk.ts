@@ -1,8 +1,7 @@
 import Phaser from 'phaser';
-import { config } from '../config';
+import { config, TAU } from '../config';
 
 const settings = config.mollusk;
-const TAU = Math.PI * 2;
 
 /**
  * Mollusks breathe: the closer the player gets, the faster and brighter the pulse, which

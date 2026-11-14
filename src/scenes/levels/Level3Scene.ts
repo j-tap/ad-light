@@ -1,38 +1,50 @@
+import Phaser from 'phaser';
 import GameScene from '../GameScene';
 import { config } from '../../config';
 import { EnemyKraken } from '../../game/enemies/Kraken';
 import { KrakenTentacleDirector } from '../../game/KrakenTentacleDirector';
+import { RockRefuge } from '../../game/RockRefuge';
+import { Terrain } from '../../game/systems/Terrain';
 
 const settings = config.chase;
+const { refuge: refugeSettings, gap: gapSettings, hints } = settings;
 
+/**
+ * The kraken chase. This scene owns the score of the chase, the gap between the jaws and the
+ * fish: every way the kraken gains or loses ground is decided here and nowhere else.
+ */
 export default class Level3Scene extends GameScene {
   private kraken!: EnemyKraken;
-  private tentacles?: KrakenTentacleDirector;
-  private rockHintShown = false;
+  private tentacles!: KrakenTentacleDirector;
+  private refuge!: RockRefuge;
 
   constructor() {
     super('Level3Scene', config.levels[3]);
   }
 
-  create() {
-    this.tentacles = undefined;
-    this.rockHintShown = false;
-
-    super.create();
-  }
-
   update(time: number, delta: number) {
     super.update(time, delta);
 
-    if (!this.kraken || !this.player) return;
+    const { x, y } = this.player.getSprite();
 
-    const playerSprite = this.player.getSprite();
+    this.kraken.update(delta, x, y);
 
-    this.kraken.update(delta, playerSprite.x, playerSprite.y);
+    if (!this.gameManager.isPlaying()) return;
 
-    if (this.gameManager.isPlaying()) {
-      this.tentacles?.update(delta);
+    this.tentacles.update(delta);
+
+    if (x >= refugeSettings.hintFromX) {
+      this.showHintOnce(hints.refuge);
     }
+  }
+
+  protected createScenery() {
+    this.refuge = new RockRefuge(this);
+  }
+
+  protected buildTerrain(terrain: Terrain, worldHeight: number) {
+    this.refuge.layout(worldHeight);
+    this.refuge.getColliders().forEach(collider => terrain.addPolygon(collider));
   }
 
   protected createLevel() {
@@ -44,29 +56,49 @@ export default class Level3Scene extends GameScene {
     return 'Escape the kraken →';
   }
 
-  protected onRockHit() {
-    this.player.stun(config.rock.hitStunDuration);
-    this.kraken?.applyCatchUp();
-
-    if (!this.rockHintShown) {
-      this.rockHintShown = true;
-      this.showHint('The rocks are solid: weave around them');
-    }
+  /** The closer the jaws, the tighter the camera. */
+  protected threatLevel() {
+    return this.kraken.getCloseness(this.player.getSprite().x);
   }
 
+  protected onRockHit() {
+    this.kraken.closeIn(gapSettings.rockPenalty);
+    this.showHintOnce(hints.rock);
+  }
+
+  protected exitDelayMs() {
+    return refugeSettings.exitDelayMs;
+  }
+
+  /** The fish is in the crack: the level lingers until the kraken has hit the rock behind it. */
   protected completeLevel() {
-    this.tentacles?.stop();
-    this.kraken.setIsHunting(false);
+    this.tentacles.stop();
+    this.hud.clearHint();
+    this.player.getSprite().setVelocity(config.player.speed * refugeSettings.coastSpeedFactor, 0);
     super.completeLevel();
   }
 
   private spawnKraken() {
     this.kraken = new EnemyKraken(this, settings.krakenSpawnX, this.scale.height / 2);
+    this.kraken.setBarrier(refugeSettings.wallX - refugeSettings.krakenMargin, () => {
+      this.sound.play('depth', { volume: refugeSettings.ramVolume });
+      this.cameras.main.shake(refugeSettings.ramShakeMs, refugeSettings.ramShakeIntensity);
+    });
+
+    this.tentacles = new KrakenTentacleDirector(
+      this,
+      this.player,
+      this.kraken,
+      () => this.worldSize().height,
+      this.levelConfig.rocks ?? [],
+      () => this.kraken.closeIn(gapSettings.hitPenalty),
+      () => this.kraken.fallBack(gapSettings.dodgeReward)
+    );
 
     this.physics.add.overlap(this.kraken.getMouthCollider(), this.player.getSprite(), () => {
       if (!this.player.isAlive()) return;
 
-      this.sound.play('eat', { volume: 0.5 });
+      this.sound.play('eat', { volume: settings.biteVolume });
       this.player.takeDamage(config.player.maxHealth);
     });
 
@@ -77,7 +109,10 @@ export default class Level3Scene extends GameScene {
   }
 
   private startHunt() {
-    this.kraken.setIsHunting(true);
+    this.kraken.startHunt();
+    this.tentacles.start();
+    this.scheduleSurge();
+    this.showHint(hints.hunt);
 
     this.time.addEvent({
       delay: settings.rumbleEveryMs,
@@ -88,23 +123,18 @@ export default class Level3Scene extends GameScene {
         }
       },
     });
-
-    this.showHint('Outrun the kraken: reach the end of the tunnel');
-
-    if (!this.levelConfig.tentacleAttacks) return;
-
-    this.tentacles = new KrakenTentacleDirector(this, this.player, this.kraken, () => this.worldSize().height);
-    this.tentacles.start();
-
-    this.time.delayedCall(config.tutorial.hintHoldMs + config.tutorial.fadeMs, () => {
-      this.showHint('Its arms lash out where the ring closes: get out of the way');
-    });
   }
 
-  private showHint(text: string) {
-    if (!this.gameManager.isPlaying()) return;
+  private scheduleSurge() {
+    const { everyMs, distance, shakeMs, shakeIntensity, volume, rate } = settings.surge;
 
-    this.hud.setHint(text);
-    this.time.delayedCall(config.tutorial.hintHoldMs, () => this.hud.clearHintIf(text));
+    this.time.delayedCall(Phaser.Math.Between(everyMs.min, everyMs.max), () => {
+      if (!this.gameManager.isPlaying()) return;
+
+      this.kraken.closeIn(distance);
+      this.sound.play('depth', { volume, rate });
+      this.cameras.main.shake(shakeMs, shakeIntensity);
+      this.scheduleSurge();
+    });
   }
 }

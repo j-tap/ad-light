@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { config, RockObstacleDef } from '../config';
-import { paintRock, Point, scatterCracks } from './art/RockPainter';
+import { config, Point, RockObstacleDef } from '../config';
+import { paintRock, scatterCracks, scatterStrata } from './art/RockPainter';
 import { between, createRng } from './art/random';
 import { ensureCanvasTexture } from './textures';
 
@@ -65,8 +65,9 @@ export class RockObstacle {
     return this.collider;
   }
 
-  containsX(x: number, margin: number) {
-    return Math.abs(x - this.anchorX) <= this.def.width / 2 + margin;
+  /** Whether a ram at this x is close enough to be this spike's doing. */
+  isNear(x: number) {
+    return Math.abs(x - this.anchorX) <= this.def.width / 2 + config.rock.hitMargin;
   }
 
   /** Returns false while the previous hit is still cooling down. */
@@ -126,24 +127,10 @@ function ensureSpikeTexture(scene: Phaser.Scene, variant: number, shape: Point[]
 
   return ensureCanvasTexture(scene, `rockSpike-${variant}`, textureWidth, textureHeight, context => {
     const rng = createRng(seed + variant * 977);
-    const strata: Point[][] = [];
 
-    for (let y = between(rng, 40, 90); y < textureHeight; y += between(rng, 70, 130)) {
-      const tilt = between(rng, -0.12, 0.12);
-
-      strata.push([
-        { x: 0, y },
-        { x: textureWidth / 2, y: y + tilt * textureWidth / 2 + between(rng, -8, 8) },
-        { x: textureWidth, y: y + tilt * textureWidth },
-      ]);
-    }
-
-    paintRock(
-      context,
-      { polygon: shape, edge: shape },
-      { cracks: scatterCracks(shape, rng), strata },
-      { x: 0, y: 0, width: textureWidth, height: textureHeight },
-      rng
-    );
+    paintRock(scene, context, { polygon: shape, edge: shape }, {
+      cracks: scatterCracks(shape, rng),
+      strata: scatterStrata({ fromX: 0, toX: textureWidth, length: textureHeight }, rng),
+    });
   });
 }
