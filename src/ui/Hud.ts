@@ -108,7 +108,19 @@ export class Hud {
 
     this.lastCollected = collected;
     this.lastTotal = total;
+
+    if (total === 0) {
+      this.molluskText.setVisible(false);
+      return;
+    }
+
+    this.molluskText.setVisible(true);
     this.molluskText.setText(`Mollusks: ${collected}/${total}`);
+  }
+
+  setGoalLabel(text: string) {
+    this.molluskText.setVisible(true);
+    this.molluskText.setText(text);
   }
 
   setHealth(health: number) {

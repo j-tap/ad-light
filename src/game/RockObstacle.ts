@@ -1,292 +1,272 @@
 import Phaser from 'phaser';
 import { config, RockObstacleDef, type RockSide } from '../config';
+import { ROCK_OVERHANG_SHADOW } from './textures';
 
-const ROCK_TEXTURE_PREFIX = 'rock_obstacle_';
-let rockIdCounter = 0;
+const COLLIDER_INSET = 0.15;
 
-/** Inset from the silhouette bounding box to keep the collider inside visible pixels. */
-const COLLIDER_INSET = 12;
+interface RockLayout {
+  x: number,
+  y: number,
+  originX: number,
+  originY: number,
+  flipX: boolean,
+  shadowDown: boolean,
+}
 
 export class RockObstacle {
   private readonly scene: Phaser.Scene;
   private readonly sprite: Phaser.GameObjects.Sprite;
-  private readonly body: Phaser.Physics.Arcade.StaticBody;
+  private readonly side: RockSide;
+  private readonly overhangShadow?: Phaser.GameObjects.Image;
   private readonly emitter: Phaser.GameObjects.Particles.ParticleEmitter;
-  private shaking = false;
-  /** Bounding box of the silhouette points inside the texture (local coords). */
-  private silhouetteBounds = { x: 0, y: 0, w: 0, h: 0 };
+  private readonly shakeTargets: Phaser.GameObjects.GameObject[];
+  private readonly anchorX: number;
+  private readonly anchorY: number;
+  private readonly hangsFromTop: boolean;
+  private lastHitTime = 0;
 
   constructor(
     scene: Phaser.Scene,
     def: RockObstacleDef,
     worldWidth: number,
     worldHeight: number,
+    markHazard = false,
   ) {
     this.scene = scene;
+    this.side = def.side;
+    this.hangsFromTop = def.side === 'top';
 
-    const { rock } = config;
-    const textureKey = this.generateTexture(def.width, def.height, def.side);
+    const { rock, render } = config;
+    const textureKey = this.pickTexture(def.side);
+    const layout = this.resolveLayout(def, worldHeight, worldWidth);
+    const depth = render.rockObstacle;
 
-    const pos = this.resolvePosition(def, worldHeight, worldWidth);
+    this.anchorX = layout.x;
+    this.anchorY = layout.y;
 
-    this.sprite = scene.add.sprite(pos.x, pos.y, textureKey)
-      .setOrigin(0.5)
+    const displaySize = this.resolveDisplaySize(def, textureKey);
+
+    this.sprite = scene.add.sprite(layout.x, layout.y, textureKey)
+      .setDisplaySize(displaySize.width, displaySize.height)
+      .setFlipX(layout.flipX)
+      .setOrigin(layout.originX, layout.originY)
       .setPipeline('Light2D')
-      .setDepth(5);
+      .setDepth(depth);
 
-    scene.physics.add.existing(this.sprite, true);
-    this.body = this.sprite.body as Phaser.Physics.Arcade.StaticBody;
-    this.fitColliderToSilhouette(def.side);
+    this.overhangShadow = this.createOverhangShadow(
+      def,
+      layout,
+      depth - 1,
+      rock,
+      displaySize.height,
+    );
 
-    this.emitter = scene.add.particles(pos.x, pos.y, 'planktonParticle', {
+    if (markHazard) {
+      const { hazardGlowColor, hazardGlowStrength, hazardGlowDistance } = rock;
+      this.sprite.postFX.addGlow(
+        hazardGlowColor,
+        hazardGlowStrength,
+        0,
+        false,
+        0.012,
+        hazardGlowDistance,
+      );
+    }
+
+    this.shakeTargets = [
+      this.sprite,
+      ...(this.overhangShadow ? [this.overhangShadow] : []),
+    ];
+
+    this.emitter = scene.add.particles(layout.x, layout.y, 'planktonParticle', {
       emitZone: {
         type: 'random',
         source: new Phaser.Geom.Rectangle(
-          -def.width / 2 - 20, -def.height / 2 - 20,
-          def.width + 40, def.height + 40,
+          -def.width / 2 - 10, -def.height / 2 - 10,
+          def.width + 20, def.height + 20,
         ),
       },
-      lifespan: 3500,
-      speedX: { min: -8, max: 8 },
-      speedY: { min: -8, max: 8 },
-      scale: { start: 0.15, end: 0 },
-      alpha: { start: 0.5, end: 0 },
+      lifespan: 3000,
+      speedX: { min: -5, max: 5 },
+      speedY: { min: -5, max: 5 },
+      scale: { start: 0.1, end: 0 },
+      alpha: { start: 0.3, end: 0 },
       tint: rock.particleColor,
       quantity: 1,
-      frequency: Math.max(200, 3000 / rock.particleCount),
+      frequency: Math.max(280, 3200 / rock.particleCount),
       gravityY: 0,
       blendMode: Phaser.BlendModes.ADD,
     });
 
     this.emitter.setPipeline('Light2D');
+    this.emitter.setDepth(depth + 1);
   }
 
   getSprite() {
     return this.sprite;
   }
 
-  getBody() {
-    return this.body;
+  overlapsPlayer(playerBounds: Phaser.Geom.Rectangle) {
+    return Phaser.Geom.Rectangle.Overlaps(this.getColliderBounds(), playerBounds);
   }
 
-  onPlayerCollision() {
-    if (this.shaking) return;
+  onPlayerCollision(): boolean {
+    const now = this.scene.time.now;
 
-    this.shaking = true;
+    if (now - this.lastHitTime < config.rock.hitCooldownMs) {
+      return false;
+    }
+
+    this.lastHitTime = now;
 
     const { hitShakeDuration, hitShakeIntensity } = config.rock;
-    const originX = this.sprite.x;
-    const originY = this.sprite.y;
 
     this.scene.tweens.add({
-      targets: this.sprite,
-      x: { value: originX + hitShakeIntensity, yoyo: true, repeat: 3, duration: hitShakeDuration / 6 },
-      y: { value: originY + hitShakeIntensity * 0.5, yoyo: true, repeat: 3, duration: hitShakeDuration / 6 },
-      onComplete: () => {
-        this.sprite.setPosition(originX, originY);
-        this.shaking = false;
-      },
+      targets: this.shakeTargets,
+      x: { value: this.anchorX + hitShakeIntensity, yoyo: true, repeat: 3, duration: hitShakeDuration / 6 },
+      y: { value: this.anchorY + hitShakeIntensity * 0.5, yoyo: true, repeat: 3, duration: hitShakeDuration / 6 },
+      onComplete: () => this.resetShakePositions(),
     });
+
+    return true;
   }
 
   getDeadZone(): Phaser.Geom.Rectangle {
     const pad = config.rock.molluskDeadZone;
-
+    const bounds = this.sprite.getBounds();
     return new Phaser.Geom.Rectangle(
-      this.sprite.x - this.sprite.displayWidth / 2 - pad,
-      this.sprite.y - this.sprite.displayHeight / 2 - pad,
-      this.sprite.displayWidth + pad * 2,
-      this.sprite.displayHeight + pad * 2,
+      bounds.centerX - bounds.width / 2 - pad,
+      bounds.centerY - bounds.height / 2 - pad,
+      bounds.width + pad * 2,
+      bounds.height + pad * 2,
     );
   }
 
-  /**
-   * Fit the rectangular physics body to the bounding box of the generated silhouette
-   * points, with an inset so the player doesn't collide with transparent edges.
-   * The wall-anchored edge stays flush (no inset there).
-   */
-  private fitColliderToSilhouette(side: RockSide) {
-    const b = this.silhouetteBounds;
-    const ins = COLLIDER_INSET;
+  private getColliderBounds() {
+    const insW = this.sprite.displayWidth * COLLIDER_INSET;
+    const insH = this.sprite.displayHeight * COLLIDER_INSET;
+    const bounds = this.sprite.getBounds();
 
-    let x = b.x;
-    let y = b.y;
-    let w = b.w;
-    let h = b.h;
+    let x = bounds.left;
+    let y = bounds.top;
+    let w = bounds.width;
+    let h = bounds.height;
 
-    if (side !== 'left') { x += ins; w -= ins; }
-    if (side !== 'right') { w -= ins; }
-    if (side !== 'top') { y += ins; h -= ins; }
-    if (side !== 'bottom') { h -= ins; }
+    switch (this.side) {
+      case 'top':
+        h -= insH;
+        x += insW; w -= insW * 2;
+        break;
+      case 'bottom':
+        y += insH; h -= insH;
+        x += insW; w -= insW * 2;
+        break;
+      case 'left':
+        w -= insW;
+        y += insH; h -= insH * 2;
+        break;
+      case 'right':
+        x += insW; w -= insW;
+        y += insH; h -= insH * 2;
+        break;
+    }
 
-    this.body.setSize(Math.max(w, 8), Math.max(h, 8));
-    this.body.setOffset(x, y);
+    return new Phaser.Geom.Rectangle(x, y, Math.max(w, 8), Math.max(h, 8));
   }
 
-  private resolvePosition(def: RockObstacleDef, worldHeight: number, worldWidth: number) {
+  private resetShakePositions() {
+    this.sprite.setPosition(this.anchorX, this.anchorY);
+
+    if (!this.overhangShadow) return;
+
+    const shadowY = this.overhangShadowY(this.anchorY, this.sprite.displayHeight);
+    this.overhangShadow.setPosition(this.anchorX, shadowY);
+  }
+
+  /** Keep PNG silhouette — squashing to def.height looked like flat squares. */
+  private resolveDisplaySize(def: RockObstacleDef, textureKey: string) {
+    const source = this.scene.textures.get(textureKey).getSourceImage() as HTMLImageElement;
+    const aspect = source.height / source.width;
+
+    if (def.side === 'top' || def.side === 'bottom') {
+      const width = def.width;
+      return { width, height: width * aspect };
+    }
+
+    return { width: def.width, height: def.height };
+  }
+
+  /** Soft shadow under overhangs — reads as depth, not a cut-out sprite on void. */
+  private createOverhangShadow(
+    def: RockObstacleDef,
+    layout: RockLayout,
+    depth: number,
+    rock: typeof config.rock,
+    rockHeight: number,
+  ): Phaser.GameObjects.Image | undefined {
+    if (def.side !== 'top' && def.side !== 'bottom') {
+      return undefined;
+    }
+
+    const shadowH = rock.overhangShadowHeight;
+    const y = this.overhangShadowY(layout.y, rockHeight);
+
+    return this.scene.add.image(layout.x, y, ROCK_OVERHANG_SHADOW)
+      .setDisplaySize(def.width * 0.88, shadowH)
+      .setOrigin(0.5, layout.shadowDown ? 0 : 1)
+      .setFlipY(!layout.shadowDown)
+      .setAlpha(rock.overhangShadowAlpha)
+      .setDepth(depth)
+      .setPipeline('Light2D');
+  }
+
+  private overhangShadowY(anchorY: number, rockHeight: number) {
+    return this.hangsFromTop ? anchorY + rockHeight : anchorY - rockHeight;
+  }
+
+  private pickTexture(side: RockSide): string {
+    const pool = config.rock.textures[side === 'right' ? 'left' : side];
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  private resolveLayout(def: RockObstacleDef, worldHeight: number, worldWidth: number): RockLayout {
     switch (def.side) {
       case 'top':
-        return { x: def.x + def.width / 2, y: def.height / 2 };
+        return {
+          x: def.x + def.width / 2,
+          y: 0,
+          originX: 0.5,
+          originY: 0,
+          flipX: false,
+          shadowDown: true,
+        };
       case 'bottom':
-        return { x: def.x + def.width / 2, y: worldHeight - def.height / 2 };
+        return {
+          x: def.x + def.width / 2,
+          y: worldHeight,
+          originX: 0.5,
+          originY: 1,
+          flipX: false,
+          shadowDown: false,
+        };
       case 'left':
-        return { x: def.width / 2, y: def.y + def.height / 2 };
+        return {
+          x: def.width / 2,
+          y: def.y + def.height / 2,
+          originX: 0.5,
+          originY: 0.5,
+          flipX: false,
+          shadowDown: false,
+        };
       case 'right':
-        return { x: worldWidth - def.width / 2, y: def.y + def.height / 2 };
+        return {
+          x: worldWidth - def.width / 2,
+          y: def.y + def.height / 2,
+          originX: 0.5,
+          originY: 0.5,
+          flipX: true,
+          shadowDown: false,
+        };
     }
-  }
-
-  private generateTexture(w: number, h: number, side: RockSide): string {
-    const key = `${ROCK_TEXTURE_PREFIX}${rockIdCounter++}`;
-    const { edgeColor, bodyColor, edgeWidth } = config.rock;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d')!;
-
-    const points = this.generateSilhouette(w, h, side);
-
-    let minX = w, minY = h, maxX = 0, maxY = 0;
-    for (const p of points) {
-      if (p.x! < minX) minX = p.x!;
-      if (p.x! > maxX) maxX = p.x!;
-      if (p.y! < minY) minY = p.y!;
-      if (p.y! > maxY) maxY = p.y!;
-    }
-    this.silhouetteBounds = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-
-    const path = new Path2D();
-    path.moveTo(points[0].x!, points[0].y!);
-    for (let i = 1; i < points.length; i++) {
-      path.lineTo(points[i].x!, points[i].y!);
-    }
-    path.closePath();
-
-    const baseR = (bodyColor >> 16) & 0xff;
-    const baseG = (bodyColor >> 8) & 0xff;
-    const baseB = bodyColor & 0xff;
-
-    // Gradient fill matching the anchor side (darker towards open edge)
-    const gx0 = side === 'right' ? w : 0;
-    const gy0 = side === 'bottom' ? h : 0;
-    const gx1 = side === 'left' ? w : side === 'right' ? 0 : gx0;
-    const gy1 = side === 'top' ? h : side === 'bottom' ? 0 : gy0;
-    const grad = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
-    grad.addColorStop(0, `rgb(${baseR + 18},${baseG + 18},${baseB + 12})`);
-    grad.addColorStop(0.5, `rgb(${baseR},${baseG},${baseB})`);
-    grad.addColorStop(1, `rgb(${Math.max(baseR - 10, 0)},${Math.max(baseG - 10, 0)},${Math.max(baseB - 6, 0)})`);
-
-    ctx.save();
-    ctx.clip(path);
-
-    ctx.fillStyle = grad;
-    ctx.fill(path);
-
-    // Grain noise for texture
-    const imageData = ctx.getImageData(0, 0, w, h);
-    const data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i + 3] === 0) continue;
-      const noise = (Math.random() - 0.5) * 22;
-      data[i] = Math.max(0, Math.min(255, data[i] + noise));
-      data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));
-      data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise * 0.7));
-    }
-    ctx.putImageData(imageData, 0, 0);
-
-    ctx.restore();
-
-    // Edge highlight (only on the open side)
-    const edgeR = (edgeColor >> 16) & 0xff;
-    const edgeG = (edgeColor >> 8) & 0xff;
-    const edgeB = edgeColor & 0xff;
-    ctx.strokeStyle = `rgba(${edgeR},${edgeG},${edgeB},0.45)`;
-    ctx.lineWidth = edgeWidth;
-    ctx.stroke(path);
-
-    // Inner shadow line for depth
-    ctx.save();
-    ctx.clip(path);
-    ctx.strokeStyle = `rgba(0,0,0,0.35)`;
-    ctx.lineWidth = edgeWidth + 3;
-    ctx.stroke(path);
-    ctx.restore();
-
-    if (this.scene.textures.exists(key)) {
-      this.scene.textures.remove(key);
-    }
-    this.scene.textures.addCanvas(key, canvas);
-
-    return key;
-  }
-
-  /**
-   * Generate a jagged silhouette anchored to one side.
-   * The "open" edge undulates around 60–80% of the dimension (not full extent),
-   * keeping the visible shape closer to the physics rectangle.
-   */
-  private generateSilhouette(
-    w: number,
-    h: number,
-    side: RockSide,
-  ): Phaser.Types.Math.Vector2Like[] {
-    const points: Phaser.Types.Math.Vector2Like[] = [];
-    const segments = 10 + Math.floor(Math.random() * 3);
-    const jX = w * 0.06;
-    const jY = h * 0.06;
-
-    switch (side) {
-      case 'top': {
-        points.push({ x: 0, y: 0 });
-        for (let i = 1; i < segments; i++) {
-          const t = i / segments;
-          points.push({
-            x: t * w + (Math.random() - 0.5) * jX,
-            y: h * (0.6 + Math.random() * 0.25) + (Math.random() - 0.5) * jY,
-          });
-        }
-        points.push({ x: w, y: 0 });
-        break;
-      }
-      case 'bottom': {
-        points.push({ x: 0, y: h });
-        for (let i = 1; i < segments; i++) {
-          const t = i / segments;
-          points.push({
-            x: t * w + (Math.random() - 0.5) * jX,
-            y: h * (0.15 + Math.random() * 0.25) + (Math.random() - 0.5) * jY,
-          });
-        }
-        points.push({ x: w, y: h });
-        break;
-      }
-      case 'left': {
-        points.push({ x: 0, y: 0 });
-        for (let i = 1; i < segments; i++) {
-          const t = i / segments;
-          points.push({
-            x: w * (0.6 + Math.random() * 0.25) + (Math.random() - 0.5) * jX,
-            y: t * h + (Math.random() - 0.5) * jY,
-          });
-        }
-        points.push({ x: 0, y: h });
-        break;
-      }
-      case 'right': {
-        points.push({ x: w, y: 0 });
-        for (let i = 1; i < segments; i++) {
-          const t = i / segments;
-          points.push({
-            x: w * (0.15 + Math.random() * 0.25) + (Math.random() - 0.5) * jX,
-            y: t * h + (Math.random() - 0.5) * jY,
-          });
-        }
-        points.push({ x: w, y: h });
-        break;
-      }
-    }
-
-    return points;
   }
 }

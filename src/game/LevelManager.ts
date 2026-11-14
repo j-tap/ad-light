@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { CurrentZone, LevelTextures } from '../config';
+import { config } from '../config';
 import { DEPTH_GRADIENT, EMPTY_TEXTURE, ensureDepthGradient, ensureEmptyTexture } from './textures';
 
 interface LevelCreateConfig {
@@ -7,6 +8,7 @@ interface LevelCreateConfig {
   plankton: boolean,
   vertical?: boolean,
   currentZones?: CurrentZone[],
+  foregroundParallax?: number,
 }
 
 interface LevelLayer {
@@ -18,7 +20,7 @@ interface LevelLayer {
   textureHeight: number,
 }
 
-const FOREGROUND_DEPTH = 10;
+const FOREGROUND_DEPTH = config.render.foreground;
 
 export class LevelManager {
   private readonly scene: Phaser.Scene;
@@ -31,7 +33,7 @@ export class LevelManager {
     this.scene = scene;
   }
 
-  createLevel({ textures, plankton, vertical = false, currentZones = [] }: LevelCreateConfig) {
+  createLevel({ textures, plankton, vertical = false, currentZones = [], foregroundParallax = 3 }: LevelCreateConfig) {
     this.vertical = vertical;
 
     if (textures.background === DEPTH_GRADIENT || textures.backgroundFar === DEPTH_GRADIENT) {
@@ -44,7 +46,7 @@ export class LevelManager {
 
     this.createLayer(textures.backgroundFar, 0.2, true).sprite.postFX.addBlur(1);
     this.createLayer(textures.background, 1, false);
-    this.createLayer(textures.foreground, 3, true).sprite.setDepth(FOREGROUND_DEPTH);
+    this.createLayer(textures.foreground, foregroundParallax, true).sprite.setDepth(FOREGROUND_DEPTH);
 
     if (plankton) {
       this.createPlanktonEmitter();

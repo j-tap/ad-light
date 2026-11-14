@@ -7,7 +7,7 @@ import { Mollusk } from './Mollusk';
 import { NoiseField } from './systems/NoiseField';
 import { Player } from './Player';
 import { config } from '../config';
-import type { MolluskConfig, EnemyKind, EnemySpawnConfig, SpawnIndent, LevelConfig } from '../config';
+import type { MolluskConfig, EnemyKind, EnemySpawnConfig, SpawnIndent, LevelConfig, LevelGoal } from '../config';
 
 export enum GameState {
   Start,
@@ -48,6 +48,8 @@ export class GameManager {
   private player!: Player;
   private lastLevel = '';
   private rockDeadZones: Phaser.Geom.Rectangle[] = [];
+  private levelGoal: LevelGoal = 'collect';
+  private escapeFinishX = 0;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -95,13 +97,18 @@ export class GameManager {
     this.elapsedMs = 0;
     this.damaged = false;
     this.rockDeadZones = rockDeadZones;
+    this.levelGoal = level.goal ?? 'collect';
+    this.escapeFinishX = level.escape?.finishX ?? 0;
     this.noiseField.reset();
     this.player.setInvulnerable(false);
 
     const teaching = level.tutorial === true;
 
     this.spawnEnemies(level.enemies, teaching ? config.tutorial.zoneWidth : 0);
-    this.spawnMollusks(level.mollusks, teaching);
+
+    if (level.mollusks.count > 0) {
+      this.spawnMollusks(level.mollusks, teaching);
+    }
 
     if (teaching) {
       this.spawnTutorialAngler();
@@ -178,9 +185,18 @@ export class GameManager {
     this.mollusks.forEach(mollusk => mollusk.update(delta, playerSprite.x, playerSprite.y));
     this.threat = this.measureThreat(playerSprite.x, playerSprite.y);
 
-    if (this.mollusks.length === 0) {
+    if (this.levelGoal === 'collect' && this.mollusks.length === 0) {
+      this.winGame();
+      return;
+    }
+
+    if (this.levelGoal === 'escape' && playerSprite.x >= this.escapeFinishX) {
       this.winGame();
     }
+  }
+
+  getLevelGoal(): LevelGoal {
+    return this.levelGoal;
   }
 
   setupCollisions(player: Player) {

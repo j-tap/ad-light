@@ -34,6 +34,7 @@ export class Player {
   private darknessTimer = 0;
   private pulseTime = 0;
   private lightDrainMultiplier = 1;
+  private stunEndTime = 0;
   private health: number;
 
   constructor(scene: Phaser.Scene, noiseField: NoiseField, spawn?: { x: number, y: number }) {
@@ -66,8 +67,13 @@ export class Player {
       this.createMoveWave();
     }
 
-    this.movementController.update(this.speed);
-    this.handleAnimations(isMoving);
+    if (this.isStunned()) {
+      this.sprite.setVelocity(0, 0);
+      this.handleAnimations(false);
+    } else {
+      this.movementController.update(this.speed);
+      this.handleAnimations(isMoving);
+    }
 
     this.wasMovingLastFrame = isInputActive;
 
@@ -105,6 +111,20 @@ export class Player {
     this.lightDrainMultiplier = multiplier;
   }
 
+  applyLightProfile(profile: { fuelStart?: number, drainMultiplier?: number, radiusMultiplier?: number }) {
+    if (profile.fuelStart !== undefined) {
+      this.lightFuel.setFuel(profile.fuelStart);
+    }
+
+    if (profile.drainMultiplier !== undefined) {
+      this.lightDrainMultiplier = profile.drainMultiplier;
+    }
+
+    if (profile.radiusMultiplier !== undefined) {
+      this.lightFuel.setRadiusMultiplier(profile.radiusMultiplier);
+    }
+  }
+
   getHealth() {
     return this.health;
   }
@@ -119,6 +139,15 @@ export class Player {
 
   isAlive() {
     return this.alive;
+  }
+
+  stun(durationMs: number) {
+    this.stunEndTime = Math.max(this.stunEndTime, this.scene.time.now + durationMs);
+    this.sprite.setVelocity(0, 0);
+  }
+
+  isStunned() {
+    return this.alive && this.scene.time.now < this.stunEndTime;
   }
 
   isMoving(threshold: number) {
@@ -187,6 +216,7 @@ export class Player {
 
     sprite.setSize(100, 56);
     sprite.setPipeline('Light2D');
+    sprite.setDepth(config.render.player);
 
     return sprite;
   }

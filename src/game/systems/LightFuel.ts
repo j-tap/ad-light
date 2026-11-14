@@ -10,6 +10,7 @@ const settings = config.player.light;
 export class LightFuel {
   private fuel = settings.fuelStart;
   private dimFactor = 0;
+  private radiusMultiplier = 1;
 
   update(delta: number, dimmed: boolean, drainMultiplier = 1) {
     const dimStep = delta / settings.dimTransitionMs;
@@ -30,6 +31,15 @@ export class LightFuel {
   reset() {
     this.fuel = settings.fuelStart;
     this.dimFactor = 0;
+    this.radiusMultiplier = 1;
+  }
+
+  setRadiusMultiplier(multiplier: number) {
+    this.radiusMultiplier = multiplier;
+  }
+
+  setFuel(value: number) {
+    this.fuel = Phaser.Math.Clamp(value, 0, settings.fuelMax);
   }
 
   getRatio() {
@@ -47,7 +57,7 @@ export class LightFuel {
   getRadius() {
     const radius = Phaser.Math.Linear(settings.radiusMin, settings.radiusMax, this.getRatio());
 
-    return Phaser.Math.Linear(radius, settings.dimRadius, this.dimFactor);
+    return Phaser.Math.Linear(radius, settings.dimRadius, this.dimFactor) * this.radiusMultiplier;
   }
 
   getIntensity(pulse: number) {

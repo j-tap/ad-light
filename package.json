@@ -14,6 +14,7 @@
     "vite-plugin-static-copy": "^2.3.0"
   },
   "devDependencies": {
+    "replicate": "^1.4.0",
     "typescript": "^5.9.3",
     "vite": "^6.2.5"
   }

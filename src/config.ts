@@ -51,16 +51,61 @@ export interface RockObstacleDef {
   side: RockSide,
 }
 
+export interface RockTextures {
+  top: string[],
+  bottom: string[],
+  left: string[],
+  right: string[],
+}
+
 export interface RockSettings {
-  edgeColor: number,
   bodyColor: number,
-  edgeWidth: number,
+  overhangShadowHeight: number,
+  overhangShadowAlpha: number,
   particleCount: number,
   particleColor: number,
+  hazardGlowColor: number,
+  hazardGlowStrength: number,
+  hazardGlowDistance: number,
+  hazardStripeColor: number,
   hitShakeDuration: number,
   hitShakeIntensity: number,
+  hitCooldownMs: number,
+  hitStunDuration: number,
+  krakenCatchUpMultiplier: number,
+  krakenCatchUpDuration: number,
+  krakenSurgeDistance: number,
   molluskDeadZone: number,
+  textures: RockTextures,
 }
+
+export interface LevelLighting {
+  ambientColor?: number,
+  fuelStart?: number,
+  drainMultiplier?: number,
+  radiusMultiplier?: number,
+}
+
+export interface EscapeConfig {
+  finishX: number,
+}
+
+export interface TentacleSettings {
+  texture: string,
+  initialDelayMs: number,
+  intervalMs: { min: number, max: number },
+  targetOffsetX: { min: number, max: number },
+  startWorldX: number,
+  endWorldX: number,
+  warningMs: number,
+  warningColor: number,
+  strikeMs: number,
+  holdMs: number,
+  retractMs: number,
+  width: number,
+}
+
+export type LevelGoal = 'collect' | 'escape';
 
 export interface LevelConfig {
   width: number,
@@ -70,6 +115,9 @@ export interface LevelConfig {
   textures: LevelTextures,
   enemies: EnemySpawnConfig[],
   mollusks: MolluskConfig,
+  goal?: LevelGoal,
+  escape?: EscapeConfig,
+  lighting?: LevelLighting,
   plankton?: boolean,
   /** Turns the level opening into a scripted teaching zone. */
   tutorial?: boolean,
@@ -77,6 +125,12 @@ export interface LevelConfig {
   currentZones?: CurrentZone[],
   finaleHeight?: number,
   rocks?: RockObstacleDef[],
+  /** Parallax multiplier for the viewport foreground layer (default 3). */
+  foregroundParallax?: number,
+  /** Amber hazard markers on rock colliders so they read clearly against the bg. */
+  markRockHazards?: boolean,
+  /** Kraken tentacle sweeps during the chase segment. */
+  tentacleAttacks?: boolean,
 }
 
 export const VERSION = __APP_VERSION__;
@@ -107,6 +161,14 @@ export const config = {
     groundHeight: 45,
     groundOffsetY: 35,
     depthUpdateStep: 0.02,
+  },
+  /** Draw order: kraken < tentacles < player < fg decor < rock protrusions. */
+  render: {
+    kraken: 6,
+    tentacle: 7,
+    player: 8,
+    foreground: 10,
+    rockObstacle: 14,
   },
   noise: {
     radiusMin: 180,
@@ -247,15 +309,44 @@ export const config = {
     },
   },
   rock: {
-    edgeColor: 0x7a6e5a,
     bodyColor: 0x2a2420,
-    edgeWidth: 3,
-    particleCount: 12,
-    particleColor: 0x5a5040,
+    overhangShadowHeight: 36,
+    overhangShadowAlpha: 0.38,
+    particleCount: 10,
+    particleColor: 0x4a4438,
+    hazardGlowColor: 0x9a7a55,
+    hazardGlowStrength: 1.4,
+    hazardGlowDistance: 5,
+    hazardStripeColor: 0xffcc66,
     hitShakeDuration: 180,
     hitShakeIntensity: 4,
+    hitCooldownMs: 700,
+    hitStunDuration: 420,
+    krakenCatchUpMultiplier: 2.8,
+    krakenCatchUpDuration: 900,
+    krakenSurgeDistance: 90,
     molluskDeadZone: 250,
+    textures: {
+      top: ['rockTop'],
+      bottom: ['rockBottom'],
+      left: ['rockLeft', 'rockLeft2'],
+      right: ['rockLeft', 'rockLeft2'],
+    },
   } as RockSettings,
+  tentacle: {
+    texture: 'krakenTentacle',
+    initialDelayMs: 2800,
+    intervalMs: { min: 2600, max: 4000 },
+    targetOffsetX: { min: -40, max: 100 },
+    startWorldX: 1500,
+    endWorldX: 11200,
+    warningMs: 380,
+    warningColor: 0xcc5544,
+    strikeMs: 200,
+    holdMs: 140,
+    retractMs: 160,
+    width: 92,
+  } as TentacleSettings,
   records: {
     timerUpdateMs: 100,
     resultToastMs: 1600,
@@ -299,30 +390,37 @@ export const config = {
     3: {
       width: 12000,
       music: ['gameMusic3'],
-      plankton: false,
+      goal: 'escape',
+      escape: { finishX: 11500 },
+      plankton: true,
+      markRockHazards: true,
+      tentacleAttacks: true,
+      lighting: {
+        ambientColor: 0x3a4a8a,
+        fuelStart: 100,
+        drainMultiplier: 0.35,
+        radiusMultiplier: 1.2,
+      },
       textures: {
         backgroundFar: 'level3BgFar',
         background: 'level3Bg',
-        foreground: 'level3Fg',
+        foreground: 'emptyTexture',
       },
       enemies: [],
       mollusks: {
-        count: 18,
-        indent: {
-          top: 230,
-          bottom: 230,
-          left: 800,
-        },
+        count: 0,
       },
       rocks: [
-        { x: 2200, y: 0, width: 320, height: 200, side: 'top' },
-        { x: 3500, y: 0, width: 400, height: 260, side: 'bottom' },
-        { x: 5000, y: 0, width: 350, height: 220, side: 'top' },
-        { x: 6200, y: 0, width: 280, height: 180, side: 'bottom' },
-        { x: 7800, y: 0, width: 360, height: 240, side: 'top' },
-        { x: 9000, y: 0, width: 300, height: 200, side: 'bottom' },
-        { x: 10200, y: 0, width: 380, height: 250, side: 'top' },
-        { x: 11200, y: 0, width: 320, height: 210, side: 'bottom' },
+        { x: 1700, y: 0, width: 300, height: 0, side: 'top' },
+        { x: 2900, y: 0, width: 280, height: 0, side: 'bottom' },
+        { x: 4100, y: 0, width: 260, height: 0, side: 'top' },
+        { x: 4700, y: 0, width: 260, height: 0, side: 'bottom' },
+        { x: 5600, y: 0, width: 320, height: 0, side: 'top' },
+        { x: 6800, y: 0, width: 300, height: 0, side: 'bottom' },
+        { x: 7900, y: 0, width: 280, height: 0, side: 'top' },
+        { x: 8500, y: 0, width: 260, height: 0, side: 'bottom' },
+        { x: 9400, y: 0, width: 300, height: 0, side: 'top' },
+        { x: 10400, y: 0, width: 280, height: 0, side: 'bottom' },
       ],
     },
     4: {

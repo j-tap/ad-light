@@ -1,10 +1,13 @@
 import Phaser from 'phaser';
+import { config } from '../config';
 
 /**
  * Textures are shared game-wide, so generated ones are created only on first request
  * and reused by every scene afterwards.
  */
 export const DEPTH_GRADIENT = 'depthGradient';
+export const EMPTY_TEXTURE = 'emptyTexture';
+export const ROCK_OVERHANG_SHADOW = 'rockOverhangShadow';
 
 export function ensureTexture(
   scene: Phaser.Scene,
@@ -33,8 +36,6 @@ export function ensureDepthGradient(scene: Phaser.Scene) {
   });
 }
 
-export const EMPTY_TEXTURE = 'emptyTexture';
-
 export function ensureEmptyTexture(scene: Phaser.Scene) {
   return ensureTexture(scene, EMPTY_TEXTURE, 4, 4, graphics => {
     graphics.fillStyle(0x000000, 0);
@@ -42,3 +43,11 @@ export function ensureEmptyTexture(scene: Phaser.Scene) {
   });
 }
 
+export function ensureRockOverhangShadow(scene: Phaser.Scene) {
+  if (scene.textures.exists(ROCK_OVERHANG_SHADOW)) return;
+
+  ensureTexture(scene, ROCK_OVERHANG_SHADOW, 64, 40, graphics => {
+    graphics.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.48, 0.48, 0, 0);
+    graphics.fillRect(0, 0, 64, 40);
+  });
+}

@@ -42,7 +42,7 @@ export default class GameScene extends BaseScene {
     this.levelManager = new LevelManager(this);
     this.gameManager.setCurrentLevel(this.scene.key);
 
-    this.lights.enable().setAmbientColor(this.ambientColor);
+    this.lights.enable().setAmbientColor(this.levelConfig.lighting?.ambientColor ?? this.ambientColor);
 
     this.setupMusic();
     this.setupEvents();
@@ -57,11 +57,23 @@ export default class GameScene extends BaseScene {
     }
 
     this.physics.add.collider(this.player.getSprite(), this.ground);
-    this.rocks.forEach(rock => {
-      this.physics.add.collider(this.player.getSprite(), rock.getSprite(), () => {
-        rock.onPlayerCollision();
-      });
-    });
+  }
+
+  /** Level-specific response to hitting a rock obstacle (stun, hints, kraken boost). */
+  protected onRockHit(_rock: RockObstacle) {}
+
+  private checkRockCollisions() {
+    if (!this.gameManager.isPlaying() || !this.player.isAlive()) return;
+
+    const playerBounds = this.player.getSprite().getBounds();
+
+    for (const rock of this.rocks) {
+      if (!rock.overlapsPlayer(playerBounds)) continue;
+
+      if (rock.onPlayerCollision()) {
+        this.onRockHit(rock);
+      }
+    }
   }
 
   update(time: number, delta: number) {
@@ -71,6 +83,7 @@ export default class GameScene extends BaseScene {
     if (!this.gameManager.isPlaying()) return;
 
     this.player.update(time, delta);
+    this.checkRockCollisions();
     this.applyCurrent(delta);
     this.updateDepthPressure();
     this.cameraDirector.update(delta, this.gameManager.getThreat());
@@ -84,16 +97,24 @@ export default class GameScene extends BaseScene {
 
     this.physics.world.gravity.y = config.world.gravityY;
     this.physics.world.setBounds(0, 0, width, height);
+    this.physics.world.drawDebug = false;
+    this.physics.world.debugGraphic?.destroy();
 
     this.levelManager.createLevel({
       textures,
       plankton: plankton !== false,
       vertical: this.isVertical(),
       currentZones,
+      foregroundParallax: this.levelConfig.foregroundParallax,
     });
     this.createGround();
 
     this.player = new Player(this, this.gameManager.getNoiseField(), this.playerSpawn());
+
+    if (this.levelConfig.lighting) {
+      this.player.applyLightProfile(this.levelConfig.lighting);
+    }
+
     this.createCamera();
     this.cameraDirector = new CameraDirector(this);
 
@@ -111,14 +132,20 @@ export default class GameScene extends BaseScene {
 
     const { width, height } = this.worldSize();
 
-    this.rocks = defs.map(def => new RockObstacle(this, def, width, height));
+    this.rocks = defs.map(def => new RockObstacle(
+      this,
+      def,
+      width,
+      height,
+      this.levelConfig.markRockHazards === true,
+    ));
   }
 
   private getRockDeadZones(): Phaser.Geom.Rectangle[] {
     return this.rocks.map(r => r.getDeadZone());
   }
 
-  private worldSize() {
+  protected worldSize() {
     return levelWorldSize(this.levelConfig, this.scale.height);
   }
 
@@ -333,7 +360,12 @@ export default class GameScene extends BaseScene {
   }
 
   private updateUI() {
-    this.hud.setMollusks(this.gameManager.getScore(), this.levelConfig.mollusks.count);
+    if (this.gameManager.getLevelGoal() === 'escape') {
+      this.hud.setGoalLabel('Escape the kraken →');
+    } else {
+      this.hud.setMollusks(this.gameManager.getScore(), this.levelConfig.mollusks.count);
+    }
+
     this.hud.setHealth(this.player.getHealth());
     this.hud.setLight(this.player.getLightRatio());
     this.hud.setTime(this.gameManager.getElapsed());

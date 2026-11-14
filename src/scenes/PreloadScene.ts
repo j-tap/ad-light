@@ -55,7 +55,13 @@ export default class PreloadScene extends BaseScene {
     this.load.image('mollusk', 'assets/images/mollusk.png');
     this.load.image('fishBone', 'assets/images/fish-bone.png');
     this.load.image('kraken', 'assets/images/enemy-kraken.png');
+    this.load.image('krakenTentacle', 'assets/images/kraken-tentacle.png');
     this.load.image('planktonParticle', 'assets/images/plankton-particle.png');
+
+    this.load.image('rockTop', 'assets/images/rocks/rock-top.png');
+    this.load.image('rockBottom', 'assets/images/rocks/rock-bottom.png');
+    this.load.image('rockLeft', 'assets/images/rocks/rock-left.png');
+    this.load.image('rockLeft2', 'assets/images/rocks/rock-left-2.png');
 
     this.load.image('level1BgFar', 'assets/images/bg/level-1-bg-far.png');
     this.load.image('level1Bg', 'assets/images/bg/level-1-bg.png');
