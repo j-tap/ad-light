@@ -376,7 +376,7 @@ export const config = {
     hitShakeDuration: 180,
     hitShakeIntensity: 4,
     hitCooldownMs: 700,
-    hitStunDuration: 320,
+    hitStunDuration: 240,
   },
   chase: {
     krakenSpawnX: -2000,
@@ -393,16 +393,16 @@ export const config = {
      * screen is a running score of how well the escape is going.
      */
     gap: {
-      start: 380,
-      min: 130,
+      start: 400,
+      min: 150,
       max: 540,
       /** A penalty never closes the gap past this: the jaws are at the tail, one stumble from shut. */
-      danger: 36,
-      creepPerSecond: 18,
-      recoverPerSecond: 28,
-      dodgeReward: 105,
-      hitPenalty: 160,
-      rockPenalty: 120,
+      danger: 55,
+      creepPerSecond: 14,
+      recoverPerSecond: 40,
+      dodgeReward: 115,
+      hitPenalty: 135,
+      rockPenalty: 100,
       /** How hard the kraken corrects towards the gap it wants, in px/s per px of error. */
       gain: 2.2,
       maxClosing: 420,
@@ -410,8 +410,8 @@ export const config = {
     },
     /** Now and then the kraken throws itself forward, whatever the fish is doing. */
     surge: {
-      everyMs: { min: 7000, max: 11000 },
-      distance: 110,
+      everyMs: { min: 8000, max: 12000 },
+      distance: 90,
       shakeMs: 500,
       shakeIntensity: 0.008,
       volume: 0.25,
@@ -423,15 +423,15 @@ export const config = {
       retryMs: 400,
       maxActive: 2,
       /** Time between strikes: the closer the kraken, the faster they come. */
-      intervalMs: { near: { min: 1300, max: 1800 }, far: { min: 2200, max: 2900 } },
+      intervalMs: { near: { min: 1600, max: 2200 }, far: { min: 2500, max: 3200 } },
       /** Deeper into the tunnel a strike is often followed by a second one. */
-      pair: { fromWorldX: 4000, chance: 0.7, delayMs: 720 },
+      pair: { fromWorldX: 5200, chance: 0.5, delayMs: 850 },
       startWorldX: 1500,
       endWorldX: 11000,
       /** The aim is where the fish will be when the arm lands if it simply keeps its lane. */
-      leadMs: 700,
+      leadMs: 850,
       /** No strike is aimed this close before or after a rock spike. */
-      rockClearance: { before: 240, after: 260 },
+      rockClearance: { before: 320, after: 260 },
       /** The first strikes spell out which way to dodge. */
       hintCount: 2,
     },
@@ -513,7 +513,7 @@ export const config = {
     strikeRoot: { top: 0, bottom: 1 } as Record<TunnelSide, number>,
     /** One lash: how it is telegraphed, how it moves and what a hit costs. */
     strike: {
-      warningMs: 560,
+      warningMs: 700,
       strikeMs: 190,
       holdMs: 320,
       retractMs: 280,
@@ -522,9 +522,9 @@ export const config = {
       /** Where along the arm the aimed spot sits, 0 at the body and 1 at the tip. */
       passAt: 0.6,
       width: 118,
-      hitRadius: 44,
+      hitRadius: 38,
       hitSamples: 10,
-      stunMs: 320,
+      stunMs: 260,
       wobble: 14,
       wobbleMs: 240,
       warning: {
