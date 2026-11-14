@@ -27,6 +27,7 @@ export default class Level3Scene extends GameScene {
 
     const { x, y } = this.player.getSprite();
 
+    this.kraken.setBaseGap(gapSettings.byLives[this.player.getHealth()] ?? gapSettings.danger);
     this.kraken.update(delta, x, y);
 
     if (!this.gameManager.isPlaying()) return;

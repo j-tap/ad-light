@@ -388,21 +388,26 @@ export const config = {
     rumbleMs: 350,
     rumbleIntensity: 0.003,
     /**
-     * The kraken holds a distance behind the fish rather than a speed. It creeps closer on its
-     * own, every mistake lets it close in and every dodged arm throws it back, so the gap on
-     * screen is a running score of how well the escape is going.
+     * The kraken holds a distance behind the fish rather than a speed. How far back it hangs is
+     * set by the fish's lives: at full health it trails well behind and only on the last life
+     * are the jaws at the tail. Around that it drifts, and every mistake, dodge or surge shoves
+     * it closer or further for a few seconds before it settles back.
      */
     gap: {
-      start: 400,
-      min: 150,
-      max: 540,
+      /** Wanted gap by lives left, index = lives. */
+      byLives: [150, 170, 320, 460],
+      max: 620,
       /** A penalty never closes the gap past this: the jaws are at the tail, one stumble from shut. */
       danger: 55,
-      creepPerSecond: 14,
-      recoverPerSecond: 40,
-      dodgeReward: 115,
-      hitPenalty: 135,
-      rockPenalty: 100,
+      /** The slow back-and-forth of the chase: two waves so it never feels mechanical. */
+      drift: { amount: 45, periodMs: 5300, secondAmount: 25, secondPeriodMs: 8900 },
+      /** How fast a shove from a mistake or a dodge wears off. */
+      recoverPerSecond: 32,
+      /** Shoves pile up, but never past this either way. */
+      maxShove: 220,
+      dodgeReward: 90,
+      hitPenalty: 60,
+      rockPenalty: 90,
       /** How hard the kraken corrects towards the gap it wants, in px/s per px of error. */
       gain: 2.2,
       maxClosing: 420,
@@ -410,8 +415,8 @@ export const config = {
     },
     /** Now and then the kraken throws itself forward, whatever the fish is doing. */
     surge: {
-      everyMs: { min: 8000, max: 12000 },
-      distance: 90,
+      everyMs: { min: 9000, max: 13000 },
+      distance: 80,
       shakeMs: 500,
       shakeIntensity: 0.008,
       volume: 0.25,
@@ -423,9 +428,9 @@ export const config = {
       retryMs: 400,
       maxActive: 2,
       /** Time between strikes: the closer the kraken, the faster they come. */
-      intervalMs: { near: { min: 1600, max: 2200 }, far: { min: 2500, max: 3200 } },
+      intervalMs: { near: { min: 1900, max: 2500 }, far: { min: 2800, max: 3600 } },
       /** Deeper into the tunnel a strike is often followed by a second one. */
-      pair: { fromWorldX: 5200, chance: 0.5, delayMs: 850 },
+      pair: { fromWorldX: 6500, chance: 0.35, delayMs: 1000 },
       startWorldX: 1500,
       endWorldX: 11000,
       /** The aim is where the fish will be when the arm lands if it simply keeps its lane. */
@@ -513,16 +518,16 @@ export const config = {
     strikeRoot: { top: 0, bottom: 1 } as Record<TunnelSide, number>,
     /** One lash: how it is telegraphed, how it moves and what a hit costs. */
     strike: {
-      warningMs: 700,
+      warningMs: 900,
       strikeMs: 190,
-      holdMs: 320,
+      holdMs: 240,
       retractMs: 280,
       overshootX: 170,
       wallMargin: 20,
       /** Where along the arm the aimed spot sits, 0 at the body and 1 at the tip. */
       passAt: 0.6,
       width: 118,
-      hitRadius: 38,
+      hitRadius: 32,
       hitSamples: 10,
       stunMs: 260,
       wobble: 14,

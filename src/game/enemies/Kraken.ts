@@ -20,7 +20,9 @@ export class EnemyKraken {
   private readonly anchor = new Phaser.Math.Vector2();
   private time = 0;
   private hunting = false;
-  private wantedGap = gapSettings.start;
+  private baseGap = gapSettings.byLives[gapSettings.byLives.length - 1];
+  /** A passing shove from a mistake, a dodge or a surge; it wears off back to zero. */
+  private shove = 0;
   private barrierX?: number;
   private onBarrier?: () => void;
 
@@ -65,14 +67,19 @@ export class EnemyKraken {
     this.hunting = true;
   }
 
-  /** A mistake by the fish: the kraken settles for a smaller gap, down to the jaws at the tail. */
-  closeIn(distance: number) {
-    this.wantedGap = Math.max(this.wantedGap - distance, gapSettings.danger);
+  /** The distance the kraken hangs back at when nothing is happening; set from the fish's lives. */
+  setBaseGap(gap: number) {
+    this.baseGap = gap;
   }
 
-  /** A clean dodge: the kraken loses ground. */
+  /** A mistake by the fish or a surge: the kraken lunges closer for a while. */
+  closeIn(distance: number) {
+    this.shove = Math.max(this.shove - distance, -gapSettings.maxShove);
+  }
+
+  /** A clean dodge: the kraken loses ground for a while. */
   fallBack(distance: number) {
-    this.wantedGap = Math.min(this.wantedGap + distance, gapSettings.max);
+    this.shove = Math.min(this.shove + distance, gapSettings.maxShove);
   }
 
   /** 0 with the kraken as far behind as it ever gets (or not hunting yet), 1 with the jaws on the fish. */
@@ -168,12 +175,12 @@ export class EnemyKraken {
     const seconds = delta / 1000;
     const mouthY = this.sprite.y + settings.mouthOffsetY;
 
-    this.wantedGap = this.wantedGap > gapSettings.min
-      ? Math.max(this.wantedGap - gapSettings.creepPerSecond * seconds, gapSettings.min)
-      : Math.min(this.wantedGap + gapSettings.recoverPerSecond * seconds, gapSettings.min);
+    const shoveDecay = gapSettings.recoverPerSecond * seconds;
+
+    this.shove = this.shove > 0 ? Math.max(this.shove - shoveDecay, 0) : Math.min(this.shove + shoveDecay, 0);
 
     const correction = Phaser.Math.Clamp(
-      (this.measureGap(playerX) - this.wantedGap) * gapSettings.gain,
+      (this.measureGap(playerX) - this.wantedGap()) * gapSettings.gain,
       -gapSettings.maxFallBack,
       gapSettings.maxClosing
     );
@@ -181,6 +188,15 @@ export class EnemyKraken {
     this.sprite.x += (config.player.speed + correction) * seconds;
     this.sprite.y += (playerY - mouthY) * settings.followFactorY * (delta / REFERENCE_FRAME_MS);
     this.stopAtBarrier();
+  }
+
+  /** Base distance plus the slow drift and whatever shove is still wearing off. */
+  private wantedGap() {
+    const { amount, periodMs, secondAmount, secondPeriodMs } = gapSettings.drift;
+    const drift = Math.sin((this.time / periodMs) * TAU) * amount
+      + Math.sin((this.time / secondPeriodMs) * TAU + 1.3) * secondAmount;
+
+    return Phaser.Math.Clamp(this.baseGap + drift + this.shove, gapSettings.danger, gapSettings.max);
   }
 
   private stopAtBarrier() {
